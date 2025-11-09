@@ -43,6 +43,7 @@ Screen {
  * ----------------------------------------- */
 .sys { border: solid #00c8ff; background: #001019; height: 100%; }
 .net { border: solid #00ff99; background: #001612; height: 100%; }
+
 /* =========================================================
  * 🌐 Topic HZ View - Enhanced Layout
  * ========================================================= */
@@ -74,7 +75,7 @@ Screen {
 }
 
 .hz #toolbar Button {
-    dock: right;              /* ✅ Textual流の右寄せ */
+    dock: right;
     min-width: 18;
     height: 3;
     border: solid #ffaa3b;
@@ -134,7 +135,7 @@ Screen {
 /* ─ グリッドレイアウト ─ */
 .launcher .script-grid {
     grid-size: 2;
-    grid-gutter: 1;    /* 小数不可 */
+    grid-gutter: 1;
     width: 100%;
     height: auto;
     padding: 0 1;
@@ -153,20 +154,17 @@ Screen {
 .launcher .script-run-button,
 .launcher .script-stop-button {
     width: 100%;
-    height: auto;           /* ← 高さを自動調整 */
-    min-height: 3;          /* ← 最小高さを確保 */
-    padding: 1;             /* ← 余白を確保 */
+    height: auto;
+    min-height: 3;
+    padding: 1;
     margin-bottom: 1;
     background: #004c4c;
     border: solid #00ffcc;
     content-align: left middle;
     color: #d7faff;
     text-style: bold;
-    
-    /* ▼ テキスト折り返しを有効化 ▼ */
-    text-wrap: wrap;        /* ← 'wrap' のみ有効 */
+    text-wrap: wrap;
 }
-
 
 /* ─ 状態ラベル ─ */
 .launcher .script-status {
@@ -311,16 +309,54 @@ WidgetSelectScreen, WidgetRemoveScreen {
     color: #d7faff;
 }
 
+/* -----------------------------------------
+ * WidgetSelect / Remove ボタン（共通）
+ * ----------------------------------------- */
 #select-dialog Button, #remove-dialog Button {
     width: 100%;
-    margin-bottom: 0.3;   /* 👈 余白を小さくする */
-    height: 3;            /* 👈 高さを固定（揃える） */
+    margin-bottom: 1;
+    height: 3;
 }
 
 #select-dialog Button#cancel, #remove-dialog Button#cancel {
-    margin-top: 1;        /* 👈 上に広い余白 */
-    margin-bottom: 0;     /* 👈 下の余白を削除 */
+    margin-top: 1;
+    margin-bottom: 0;
     height: 3;
+}
+
+/* =========================================================
+ * 🧩 WidgetSelectView - Split / Tab 横並び対応
+ * ========================================================= */
+.widget-select-row {
+    layout: horizontal;
+    width: 100%;
+    height: 3;
+    align-vertical: middle;
+    margin-bottom: 1;
+}
+
+.widget-name {
+    width: 1fr;
+    text-align: left;
+    padding-left: 1;
+    color: #d7faff;
+}
+
+.split-btn, .tab-btn {
+    width: 10;
+    height: 3;
+    margin-left: 1;
+    text-style: bold;
+}
+
+.split-btn:hover {
+    background: #007acc;
+    color: white;
+}
+
+.tab-btn:hover {
+    background: #00cc88;
+    color: black;
 }
 
 /* -----------------------------------------

@@ -11,14 +11,17 @@ class WidgetSelectView(Screen):
         with VerticalScroll(id="select-dialog"):
             yield Static("追加するウィジェットを選択してください", classes="title")
 
+            # 各Widgetごとに1行（横並び構成）
             for wid, meta in WIDGET_REGISTRY.items():
                 title = meta["title"]
-                # 横並びで「Split / Tab」ボタン
                 with Horizontal(classes="widget-select-row"):
+                    # 📦 Widget名ラベル（左寄せ）
                     yield Static(f"📦 {title}", classes="widget-name")
-                    yield Button("🪟 Split", id=f"add-split-{wid}", variant="primary")
-                    yield Button("🗂 Tab", id=f"add-tab-{wid}", variant="success")
+                    # Split / Tab ボタン（右側）
+                    yield Button("🪟 Split", id=f"add-split-{wid}", variant="primary", classes="split-btn")
+                    yield Button("🗂 Tab", id=f"add-tab-{wid}", variant="success", classes="tab-btn")
 
+            # 最後にCancelボタン
             yield Button("--- Cancel ---", id="cancel", variant="error")
 
     def on_button_pressed(self, event: Button.Pressed):
