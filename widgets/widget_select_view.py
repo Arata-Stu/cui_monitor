@@ -5,28 +5,26 @@ from widgets import WIDGET_REGISTRY
 
 
 class WidgetSelectView(Screen):
-    """Widget選択画面（split/tab の選択付き）"""
+    """Widget選択画面（Split / Tab 横並び対応）"""
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="select-dialog"):
             yield Static("追加するウィジェットを選択してください", classes="title")
 
-            # 各Widgetごとに1行（横並び構成）
             for wid, meta in WIDGET_REGISTRY.items():
                 title = meta["title"]
-                with Horizontal(classes="widget-select-row"):
-                    # 📦 Widget名ラベル（左寄せ）
-                    yield Static(f"📦 {title}", classes="widget-name")
-                    # Split / Tab ボタン（右側）
-                    yield Button("🪟 Split", id=f"add-split-{wid}", variant="primary", classes="split-btn")
-                    yield Button("🗂 Tab", id=f"add-tab-{wid}", variant="success", classes="tab-btn")
 
-            # 最後にCancelボタン
+                row = Horizontal(classes="widget-select-row")
+                row.mount(Static(f"📦 {title}", classes="widget-name"))
+                row.mount(Button("🪟 Split", id=f"add-split-{wid}", variant="primary", classes="split-btn"))
+                row.mount(Button("🗂 Tab", id=f"add-tab-{wid}", variant="success", classes="tab-btn"))
+                yield row
+
+            # Cancelボタン
             yield Button("--- Cancel ---", id="cancel", variant="error")
 
     def on_button_pressed(self, event: Button.Pressed):
         bid = event.button.id
-
         if bid == "cancel":
             self.dismiss(None)
             return
