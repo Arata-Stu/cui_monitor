@@ -1,28 +1,37 @@
 from textual.app import ComposeResult, Screen
-from textual.containers import VerticalScroll
+from textual.containers import VerticalScroll, Horizontal
 from textual.widgets import Button, Static
 from widgets import WIDGET_REGISTRY
 
+
 class WidgetSelectView(Screen):
-    """widgets/__init__.py のレジストリから自動生成"""
+    """Widget選択画面（split/tab の選択付き）"""
 
     def compose(self) -> ComposeResult:
-        print("WIDGET_REGISTRY in select view:", list(WIDGET_REGISTRY.keys()))
-
-        print("=== WIDGET_REGISTRY (from WidgetSelectView) ===")
-        for wid, meta in WIDGET_REGISTRY.items():
-            print(f"- {wid}: {meta['title']}")
-
         with VerticalScroll(id="select-dialog"):
             yield Static("追加するウィジェットを選択してください", classes="title")
+
             for wid, meta in WIDGET_REGISTRY.items():
-                yield Button(meta["title"], id=f"add-{wid}", variant="primary")
+                title = meta["title"]
+                # 横並びで「Split / Tab」ボタン
+                with Horizontal(classes="widget-select-row"):
+                    yield Static(f"📦 {title}", classes="widget-name")
+                    yield Button("🪟 Split", id=f"add-split-{wid}", variant="primary")
+                    yield Button("🗂 Tab", id=f"add-tab-{wid}", variant="success")
+
             yield Button("--- Cancel ---", id="cancel", variant="error")
 
-
     def on_button_pressed(self, event: Button.Pressed):
-        if event.button.id == "cancel":
+        bid = event.button.id
+
+        if bid == "cancel":
             self.dismiss(None)
-        else:
-            widget_type = event.button.id.replace("add-", "")
-            self.dismiss(widget_type)
+            return
+
+        if bid.startswith("add-split-"):
+            widget_type = bid.replace("add-split-", "")
+            self.dismiss((widget_type, "split"))
+
+        elif bid.startswith("add-tab-"):
+            widget_type = bid.replace("add-tab-", "")
+            self.dismiss((widget_type, "tab"))
