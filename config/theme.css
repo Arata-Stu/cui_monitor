@@ -58,11 +58,11 @@ Screen {
 .hz #toolbar {
     height: 3;
     layout: horizontal;
-    align-vertical: middle;
+    align-vertical: middle;  /* 垂直中央寄せ */
+    content-align: left middle;  /* 横方向：左寄せ, 縦方向：中央 */
     background: #2a1a00;
     border-bottom: solid #ffaa3b;
     padding: 0 1;
-    content-align: center middle;
 }
 
 /* タイトルとボタンの調整 */

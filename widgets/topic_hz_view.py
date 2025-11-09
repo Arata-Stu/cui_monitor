@@ -57,9 +57,10 @@ class TopicHZView(Widget):
         """ウィジェットのUIを構築"""
         with Vertical(): # ウィジェット全体を縦並びレイアウトにする
             # ツールバー
-            with Horizontal(id="toolbar", classes="toolbar", align="center middle"):
+            with Horizontal(id="toolbar", classes="toolbar"):
                 yield Label("📈 Topic HZ Monitor", classes="title")
                 yield Button("Clear Stalled", id="clear_button", variant="error")
+
 
             
             # データテーブル
