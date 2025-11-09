@@ -98,41 +98,24 @@ class TopicHZView(Widget):
         table = self.query_one(DataTable)
 
         if self.has_error:
-            table.clear()
-            table.add_columns("Error", "Message") 
+            table.clear(columns=True)
+            table.add_columns("Error", "Message")
             table.add_row(f"[red]ROS Error[/red]", f"[red]{self.error_message}[/red]")
             return
-            
-        with self._stats_lock: 
+
+        with self._stats_lock:
             stats_copy = {name: data.copy() for name, data in self._internal_stats.items()}
 
-        if table.columns.keys() != ["Topic", "Type", "Hz", "State"]:
-             table.clear()
-             table.add_columns("Topic", "Type", "Hz", "State")
-        else:
-             table.clear() 
+        # ✅ 列は最初の1回だけ定義
+        if len(table.columns) == 0:
+            table.add_columns("Topic", "Type", "Hz", "State")
+
+        table.clear(rows=True)  # ✅ 行のみクリア
 
         if not stats_copy:
             table.add_row("ROSトピックを検索中...", "-", "-", "-")
             return
 
-        sorted_topics = sorted(stats_copy.items())
-        now = time.time() 
-
-        for name, info in sorted_topics:
-            state, state_style = self.evaluate_topic_state(info, now)
-            
-            if state == "🔴 Stalled":
-                hz_str = "0.0"
-            else:
-                hz_str = f"{info['hz']:.1f}"
-            
-            table.add_row(
-                f"[{state_style}]{name}[/]", 
-                f"[{state_style}]{info['msg_type']}[/]", 
-                f"[{state_style}]{hz_str}[/]",
-                f"[{state_style}]{state}[/]"
-            )
 
     async def init_ros(self):
         self._ros_thread_running = True
