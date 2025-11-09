@@ -1,18 +1,18 @@
 import asyncio, time, random, os
-from textual.widget import Widget
-from textual.reactive import reactive
-from rich.table import Table
+import threading # スレッドロックのために追加
 
-# --- ROS import (optional) ---
-try:
-    import rclpy
-    from rclpy.node import Node
-    from rclpy.executors import SingleThreadedExecutor
-    from rclpy.utilities import get_message
-    from ros_utils.ros_node_base import AsyncROSNode
-    ROS_AVAILABLE = True
-except ImportError:
-    ROS_AVAILABLE = False
+# --- Textual imports ---
+from textual.app import App, ComposeResult
+from textual.widget import Widget
+from textual.widgets import Button, DataTable, Label
+from textual.containers import Vertical, Horizontal 
+from rich.table import Table 
+
+# --- ROS import (常にインポートできる前提) ---
+import rclpy
+from rclpy.node import Node
+from rclpy.executors import SingleThreadedExecutor
+from rosidl_runtime_py.utilities import get_message
 
 
 WIDGET_META = {
@@ -27,119 +27,232 @@ WIDGET_META = {
 
 class TopicHZView(Widget):
     """ROS2 Topic HZ Monitor (Textual Widget)
-       macOSではダミーデータ生成モード
+       (rclpy がインストールされている環境専用)
+       
+       「Clear Stalled」ボタンを搭載。
+       ROSの全処理を専用ワーカースレッドに分離し、
+       スレッドセーフな通信を行います。
     """
+    
+    update_interval = 1.0  # UIの更新間隔
+    
+    has_error = False
+    error_message = ""
 
-    topic_stats = reactive({})
-    use_dummy = False
-    update_interval = 1.0  # 秒
-
-    def __init__(self, topics=None, **kwargs):
+    def __init__(self, topics: list[str] | None = None, **kwargs):
         super().__init__(**kwargs)
-        self.topics = topics or []
-        self.use_dummy = not ROS_AVAILABLE or not os.getenv("ROS_DOMAIN_ID")
+        self.topics_to_monitor = topics
+        
+        self._internal_stats = {} 
+        self._stats_lock = threading.Lock()
+        
+        self._ros_thread_running = False
+        self.node = None 
+        self.subscriptions = {}
+        
+        self._clear_stalled_request = False
+
+    # --- ★ 修正点: Vertical でラップし、縦並びを強制 ---
+    def compose(self) -> ComposeResult:
+        """ウィジェットのUIを構築"""
+        with Vertical(): # ウィジェット全体を縦並びレイアウトにする
+            # ツールバー
+            with Horizontal(id="toolbar", classes="toolbar", align="center middle"):
+                yield Label("📈 Topic HZ Monitor", classes="title")
+                yield Button("Clear Stalled", id="clear_button", variant="error")
+
+            
+            # データテーブル
+            yield DataTable(id="hz_table", zebra_stripes=True)
+
 
     async def on_mount(self):
-        """起動時にROS購読またはダミー生成を開始"""
-        if self.use_dummy:
-            self.set_interval(self.update_interval, self.update_dummy)
+        """起動時にROSワーカースレッドを開始し、UIを初期化"""
+        
+        # --- ★ 修正点: ツールバーとテーブルの高さを明示的に設定 ---
+        try:
+            # ツールバーの高さを3に固定
+            self.query_one("#toolbar").styles.height = 3
+            # DataTable が残りの高さをすべて占有 (1fr)
+            self.query_one("#hz_table").styles.height = "1fr" 
+        except Exception as e:
+            self.log(f"WARN: Failed to set layout styles: {e}")
+        # --- ここまで ---
+
+        table = self.query_one(DataTable)
+        
+        # (v_017 で header=True を削除済み)
+        table.clear() 
+        
+        table.add_columns("Topic", "Type", "Hz", "State")
+        table.add_row("ROSノードを初期化中...", "-", "-", "-")
+        
+        await self.init_ros()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "clear_button":
+            self.action_clear_stalled()
+
+    def update_ui_from_stats(self):
+        table = self.query_one(DataTable)
+
+        if self.has_error:
+            table.clear()
+            table.add_columns("Error", "Message") 
+            table.add_row(f"[red]ROS Error[/red]", f"[red]{self.error_message}[/red]")
+            return
+            
+        with self._stats_lock: 
+            stats_copy = {name: data.copy() for name, data in self._internal_stats.items()}
+
+        if table.columns.keys() != ["Topic", "Type", "Hz", "State"]:
+             table.clear()
+             table.add_columns("Topic", "Type", "Hz", "State")
         else:
-            await self.init_ros()
+             table.clear() 
 
-    # --- ダミーモード ---
-    async def update_dummy(self):
-        """疑似トピックHzデータを生成"""
-        dummy_topics = ["/scan", "/odom", "/imu", "/cmd_vel"]
+        if not stats_copy:
+            table.add_row("ROSトピックを検索中...", "-", "-", "-")
+            return
 
-        for t in dummy_topics:
-            if t not in self.topic_stats:
-                self.topic_stats[t] = {
-                    "msg_type": "std_msgs/msg/Float32",
-                    "hz": 0.0,
-                    "last_time": time.time(),
-                }
+        sorted_topics = sorted(stats_copy.items())
+        now = time.time() 
 
-            # Hzをランダムに変化
-            hz = round(random.uniform(0.0, 20.0), 1)
-            self.topic_stats[t]["hz"] = hz
-            # 低Hzでも更新があったとみなす
-            self.topic_stats[t]["last_time"] = time.time()
+        for name, info in sorted_topics:
+            state, state_style = self.evaluate_topic_state(info, now)
+            
+            if state == "🔴 Stalled":
+                hz_str = "0.0"
+            else:
+                hz_str = f"{info['hz']:.1f}"
+            
+            table.add_row(
+                f"[{state_style}]{name}[/]", 
+                f"[{state_style}]{info['msg_type']}[/]", 
+                f"[{state_style}]{hz_str}[/]",
+                f"[{state_style}]{state}[/]"
+            )
 
-        self.refresh()
-
-    # --- ROS初期化 ---
     async def init_ros(self):
-        """ROS2ノード作成 + 複数トピック購読"""
-        rclpy.init()
-        self.node = AsyncROSNode("topic_hz_monitor")
-        self.topic_stats = {}
-
-        available = self.node.get_topic_names_and_types()
-        for topic_name, msg_types in available:
-            if not msg_types:
-                continue
-            msg_type = msg_types[0]
-
-            try:
-                msg_class = get_message(msg_type)
-                self.topic_stats[topic_name] = {
-                    "msg_type": msg_type,
-                    "count": 0,
-                    "hz": 0.0,
-                    "last_time": time.time(),
-                }
-
-                def callback(msg, name=topic_name):
-                    st = self.topic_stats[name]
-                    now = time.time()
-                    dt = now - st["last_time"]
-                    st["hz"] = 1.0 / dt if dt > 0 else st["hz"]
-                    st["last_time"] = now
-                    st["count"] += 1
-
-                self.node.create_subscription(msg_class, topic_name, callback, 10)
-            except Exception:
-                continue
-
-        self.run_worker(self.node.spin_async(), exclusive=True)
-        self.set_interval(self.update_interval, self.refresh)
-
-    # --- 状態判定 ---
-    def evaluate_topic_state(self, info):
-        """Hz・経過時間に基づきトピック状態を判定"""
-        now = time.time()
-        age = now - info.get("last_time", 0)
-        hz = info.get("hz", 0.0)
-
-        if hz > 1.0 and age < 2.0:
-            return "[green]🟢 OK[/green]"
-        elif age < 5.0:
-            return "[yellow]🟡 Slow[/yellow]"
-        else:
-            return "[red]🔴 Stalled[/red]"
-
-    # --- 描画 ---
-    def render(self):
-        table = Table(
-            title="📈 Topic HZ Monitor (Dummy)" if self.use_dummy else "📈 Topic HZ Monitor",
-            expand=True,
+        self._ros_thread_running = True
+        self.run_worker(
+            asyncio.to_thread(self.ros_worker_loop), 
+            exclusive=True, 
+            group="ros_spinner"
         )
-        table.add_column("Topic", style="cyan", no_wrap=True)
-        table.add_column("Type", style="magenta")
-        table.add_column("Hz", justify="right", style="green")
-        table.add_column("State", justify="center")
+        self.set_interval(self.update_interval, self.update_ui_from_stats)
+        
+    def action_clear_stalled(self):
+        self._clear_stalled_request = True
+        self.log("Clear Stalled request received.")
 
-        if not self.topic_stats:
-            table.add_row("-", "-", "-", "-")
-        else:
-            for name, info in self.topic_stats.items():
-                hz_str = f"{info['hz']:.1f}" if "hz" in info else "-"
-                state = self.evaluate_topic_state(info)
-                table.add_row(name, info["msg_type"], hz_str, state)
+    def _create_callback(self, topic_name):
+        def callback(msg):
+            with self._stats_lock: 
+                if topic_name not in self._internal_stats:
+                    return
+                stats = self._internal_stats[topic_name]
+                stats["count"] += 1
+                stats["last_time"] = time.time()
+        return callback
 
-        return table
+    def _cleanup_subscriptions(self, topic_names_to_remove):
+        if not hasattr(self, 'node') or not self.node:
+             return
+        for topic_name in topic_names_to_remove:
+            if topic_name in self.subscriptions:
+                try:
+                    self.node.destroy_subscription(self.subscriptions[topic_name])
+                except Exception as e:
+                    self.app.call_from_thread(self.log, f"WARN: destroy_subscription failed: {e}")
+                del self.subscriptions[topic_name]
+            if topic_name in self._internal_stats:
+                del self._internal_stats[topic_name]
+
+    def ros_worker_loop(self):
+        try:
+            if not rclpy.ok(): 
+                rclpy.init()
+            self.node = Node("topic_hz_monitor") 
+            executor = SingleThreadedExecutor()
+            executor.add_node(self.node)
+        except Exception as e:
+            self.app.call_from_thread(setattr, self, "has_error", True)
+            self.app.call_from_thread(setattr, self, "error_message", f"ROS 2 の初期化に失敗: {e}")
+            return
+        
+        last_scan_time = 0.0
+
+        while self._ros_thread_running and rclpy.ok():
+            now = time.time()
+            
+            if self._clear_stalled_request:
+                with self._stats_lock:
+                    stalled_topics = []
+                    for name, stats in self._internal_stats.items():
+                        age = now - stats.get("last_time", 0)
+                        if age > 5.0 or (stats.get("last_time", 0) == 0.0 and age > 1.0): 
+                            stalled_topics.append(name)
+                    
+                    self._cleanup_subscriptions(stalled_topics)
+                    self._clear_stalled_request = False
+                
+                self.app.call_from_thread(self.update_ui_from_stats)
+                continue
+
+            if now - last_scan_time > 1.0:
+                last_scan_time = now
+                try:
+                    available_topics_list = self.node.get_topic_names_and_types()
+                    with self._stats_lock: 
+                        for topic_name, msg_types in available_topics_list:
+                            if topic_name not in self._internal_stats:
+                                if self.topics_to_monitor and topic_name not in self.topics_to_monitor: continue
+                                if not msg_types: continue
+                                msg_type = msg_types[0]
+                                try:
+                                    msg_class = get_message(msg_type)
+                                    self._internal_stats[topic_name] = {
+                                        "msg_type": msg_type, "count": 0, "last_time": 0.0,   
+                                        "prev_count": 0, "prev_time": now, "hz": 0.0,          
+                                    }
+                                    sub = self.node.create_subscription(
+                                        msg_class, topic_name, self._create_callback(topic_name), 10
+                                    )
+                                    self.subscriptions[topic_name] = sub 
+                                except Exception:
+                                    continue
+                except Exception:
+                    pass 
+
+            with self._stats_lock: 
+                for name, stats in self._internal_stats.items():
+                    dt = now - stats["prev_time"]
+                    if dt > 2.0: # 2秒ウィンドウ
+                        d_count = stats["count"] - stats["prev_count"]
+                        stats["hz"] = d_count / dt
+                        stats["prev_count"] = stats["count"]
+                        stats["prev_time"] = now
+
+            executor.spin_once(timeout_sec=0.1)
+        
+        self._cleanup_subscriptions(list(self.subscriptions.keys()))
+        if rclpy.ok() and self.node:
+            self.node.destroy_node()
+
+    def evaluate_topic_state(self, info, now):
+        age = now - info.get("last_time", 0) 
+        if info.get("last_time", 0) == 0.0 and age > 1.0:
+             return "🔴 Stalled", "red"
+        elif age < 2.5: 
+            return "🟢 OK", "green"
+        elif age < 5.0: 
+            return "🟡 Slow", "yellow"
+        else: 
+            return "🔴 Stalled", "red"
 
     async def on_unmount(self):
-        if not self.use_dummy and hasattr(self, "node"):
-            self.node.shutdown()
-            rclpy.shutdown()
+        if hasattr(self, "node"):
+            self._ros_thread_running = False
+        if rclpy.ok():
+             rclpy.shutdown()

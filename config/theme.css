@@ -43,7 +43,58 @@ Screen {
  * ----------------------------------------- */
 .sys { border: solid #00c8ff; background: #001019; height: 100%; }
 .net { border: solid #00ff99; background: #001612; height: 100%; }
-.hz  { border: solid #ffaa3b; background: #1a1200; height: 100%; }
+/* =========================================================
+ * 🌐 Topic HZ View Layout Fix
+ * ========================================================= */
+.hz {
+    border: solid #ffaa3b;
+    background: #1a1200;
+    height: 100%;
+    layout: vertical;
+    padding: 1;
+}
+
+/* HZビュー専用ツールバー */
+.hz #toolbar {
+    height: 3;
+    layout: horizontal;
+    align-vertical: middle;
+    background: #2a1a00;
+    border-bottom: solid #ffaa3b;
+    padding: 0 1;
+    content-align: center middle;
+}
+
+/* タイトルとボタンの調整 */
+.hz #toolbar Label {
+    width: 1fr;
+    color: #ffaa3b;
+    text-style: bold;
+    padding-left: 1;
+}
+
+.hz #toolbar Button {
+    height: 3;
+    min-width: 16;
+    margin-left: 1;
+    background: #aa3b3b;
+    border: solid #ffaa3b;
+    color: #fff;
+    text-style: bold;
+}
+
+.hz #toolbar Button:hover {
+    background: #ffaa3b;
+    color: #000;
+}
+
+/* テーブルエリア */
+.hz #hz_table {
+    height: 1fr;
+    border: none;
+    background: #0b0a05;
+    color: #d7faff;
+}
 .scan { border: solid #00d8ff; background: #001822; height: 100%; }
 
 #param { border: solid #ffaa3b; background: #101010; }
