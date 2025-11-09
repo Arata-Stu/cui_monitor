@@ -325,7 +325,7 @@ WidgetSelectScreen, WidgetRemoveScreen {
 }
 
 /* =========================================================
- * 🧩 WidgetSelectView - Split / Tab 横並び対応
+ * 🧩 WidgetSelectView - Split / Tab 横並び修正版（Textual互換）
  * ========================================================= */
 .widget-select-row {
     layout: horizontal;
@@ -345,22 +345,22 @@ WidgetSelectScreen, WidgetRemoveScreen {
     text-style: bold;
 }
 
-/* ボタンを横に並べるために固定幅ではなく柔軟幅にする */
+/* ✅ Textual互換: flexを使わずに横並び */
 .split-btn, .tab-btn {
     min-width: 10;
     width: auto;
-    flex: 0 0 auto; /* ✅ 横に並ぶ */
     height: 3;
     margin-left: 1;
     text-style: bold;
     padding: 0 2;
 }
 
-/* ボタンカラー調整 */
+/* カラー設定 */
 .split-btn {
     background: #004c80;
     border: solid #0088ff;
 }
+
 .tab-btn {
     background: #00664c;
     border: solid #00cc88;
@@ -370,6 +370,7 @@ WidgetSelectScreen, WidgetRemoveScreen {
     background: #0088ff;
     color: black;
 }
+
 .tab-btn:hover {
     background: #00ffcc;
     color: black;
