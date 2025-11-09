@@ -11,20 +11,19 @@ class WidgetSelectView(Screen):
         with VerticalScroll(id="select-dialog"):
             yield Static("追加するウィジェットを選択してください", classes="title")
 
+            # ✅ Textualの正しい構文: with Horizontal(): yield ...
             for wid, meta in WIDGET_REGISTRY.items():
                 title = meta["title"]
+                with Horizontal(classes="widget-select-row"):
+                    yield Static(f"📦 {title}", classes="widget-name")
+                    yield Button("🪟 Split", id=f"add-split-{wid}", variant="primary", classes="split-btn")
+                    yield Button("🗂 Tab", id=f"add-tab-{wid}", variant="success", classes="tab-btn")
 
-                row = Horizontal(classes="widget-select-row")
-                row.mount(Static(f"📦 {title}", classes="widget-name"))
-                row.mount(Button("🪟 Split", id=f"add-split-{wid}", variant="primary", classes="split-btn"))
-                row.mount(Button("🗂 Tab", id=f"add-tab-{wid}", variant="success", classes="tab-btn"))
-                yield row
-
-            # Cancelボタン
             yield Button("--- Cancel ---", id="cancel", variant="error")
 
     def on_button_pressed(self, event: Button.Pressed):
         bid = event.button.id
+
         if bid == "cancel":
             self.dismiss(None)
             return
