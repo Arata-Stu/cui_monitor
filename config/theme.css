@@ -1,0 +1,271 @@
+/* =========================================================
+ * 🌌 RC Dashboard Theme (Textual対応) - Compact Script Launcher (Fixed)
+ * ========================================================= */
+
+/* -----------------------------------------
+ * 基本レイアウト設定
+ * ----------------------------------------- */
+Screen {
+    background: #0b1016;
+    color: #d7faff;
+    layout: vertical;
+}
+
+/* -----------------------------------------
+ * メイングリッド領域
+ * ----------------------------------------- */
+#main-grid {
+    grid-size: 2;
+    grid-gutter: 1;
+    width: 100%;
+    height: 1fr;
+    padding: 1;
+}
+
+/* -----------------------------------------
+ * ツールバー（共通）
+ * ----------------------------------------- */
+#toolbar {
+    height: 3;
+    background: #081018;
+    border-top: solid #0070a0;
+    padding: 0 2;
+}
+
+#toolbar Button {
+    margin-right: 1;
+    height: 3;
+    padding: 0 1;
+}
+
+/* -----------------------------------------
+ * 各ウィジェット共通
+ * ----------------------------------------- */
+.sys { border: solid #00c8ff; background: #001019; height: 100%; }
+.net { border: solid #00ff99; background: #001612; height: 100%; }
+.hz  { border: solid #ffaa3b; background: #1a1200; height: 100%; }
+.scan { border: solid #00d8ff; background: #001822; height: 100%; }
+
+#param { border: solid #ffaa3b; background: #101010; }
+.param-col { border: solid #ffaa3b; background: #141414; height: 100%; }
+
+/* -----------------------------------------
+ * Script Launcher View（改良版）
+ * ----------------------------------------- */
+.launcher {
+    border: solid #00ffcc;
+    background: #001a1a;
+    padding: 1;
+    layout: vertical;
+}
+
+/* タイトルバー */
+.launcher #toolbar {
+    dock: top;
+    height: 3;
+    background: #002020;
+    border-bottom: solid #00ffcc;
+    padding: 0 1;
+    align-vertical: middle;
+}
+
+.launcher .title {
+    color: #00ffcc;
+    text-style: bold;
+    padding: 0 1;
+    width: 1fr;
+}
+
+/* ─ グリッドレイアウト ─ */
+.launcher .script-grid {
+    grid-size: 2;
+    grid-gutter: 1;    /* 小数不可 */
+    width: 100%;
+    height: auto;
+    padding: 0 1;
+}
+
+/* ─ スクリプトカード ─ */
+.launcher .script-card {
+    border: solid #004c4c;
+    background: #002020;
+    padding: 0 1;
+    height: auto;
+    layout: vertical;
+    border: round;
+}
+
+.launcher .script-run-button,
+.launcher .script-stop-button {
+    width: 100%;
+    height: auto;           /* ← 高さを自動調整 */
+    min-height: 3;          /* ← 最小高さを確保 */
+    padding: 1;             /* ← 余白を確保 */
+    margin-bottom: 1;
+    background: #004c4c;
+    border: solid #00ffcc;
+    content-align: left middle;
+    color: #d7faff;
+    text-style: bold;
+    
+    /* ▼ テキスト折り返しを有効化 ▼ */
+    text-wrap: wrap;        /* ← 'wrap' のみ有効 */
+}
+
+
+/* ─ 状態ラベル ─ */
+.launcher .script-status {
+    width: 100%;
+    text-align: center;
+    background: #001f1f;
+    height: 2;
+    padding: 0 1;
+    border: none;
+    color: #99ffdd;
+}
+
+/* ─ ログエリア ─ */
+.launcher #log-box {
+    height: 1fr;
+    background: #000a0a;
+    border: solid #003030;
+    margin-top: 1;
+    margin-bottom: 1;
+    padding: 1;
+    overflow: auto;
+}
+
+/* ─ 入力バー ─ */
+.launcher #input-bar {
+    height: 3;
+    background: transparent;
+    border: none;
+}
+
+/* 入力欄 */
+.launcher #input-box {
+    height: 3;
+    width: 1fr;
+    border: solid #004040;
+    background: #001010;
+    color: #00ffcc;
+    padding: 0 1;
+}
+
+/* Clear Log ボタン */
+.launcher #input-bar Button {
+    padding: 0 3;
+    margin-left: 1;
+    height: 3;
+    background: #004c4c;
+    color: #00ffcc;
+    border: solid #00ffcc;
+    text-style: bold;
+    content-align: center middle;
+}
+
+.launcher #input-bar Button:hover {
+    background: #00ffcc;
+    color: black;
+    text-style: bold;
+    border: solid #00ffcc;
+}
+
+/* -----------------------------------------
+ * DefaultView
+ * ----------------------------------------- */
+.default {
+    background: #0b1016;
+    color: #d7faff;
+    content-align: center middle;
+}
+
+.default-card {
+    align: center middle;
+    width: 60%;
+    height: auto;
+    background: #0e151c;
+    border: thick #007acc;
+    padding: 2 3;
+    text-align: center;
+    content-align: center middle;
+}
+
+#app-title {
+    color: #00ccff;
+    text-style: bold;
+    padding-bottom: 1;
+    text-align: center;
+}
+
+#subtitle {
+    color: #aaa;
+    padding-bottom: 2;
+    text-align: center;
+}
+
+.default-card Button {
+    width: 100%;
+    margin-top: 1;
+    height: 3;
+    text-style: bold;
+}
+
+.default-card Button:hover {
+    background: #0070a0;
+    color: white;
+    text-style: bold;
+}
+
+/* -----------------------------------------
+ * 空ダッシュボードガイド
+ * ----------------------------------------- */
+.guide {
+    border: dashed #333;
+    color: #888;
+    text-align: center;
+    padding: 3;
+    width: 100%;
+    height: 100%;
+    content-align: center middle;
+    background: #0b0f14;
+}
+
+/* -----------------------------------------
+ * モーダルスクリーン (Add / Remove)
+ * ----------------------------------------- */
+WidgetSelectScreen, WidgetRemoveScreen {
+    align: center middle;
+}
+
+#select-dialog, #remove-dialog {
+    width: 60;
+    height: auto;
+    max-height: 80%;
+    background: #0e151c;
+    border: thick #007acc;
+    padding: 1 2;
+}
+
+#remove-dialog { border: thick #CC3333; }
+
+#select-dialog .title, #remove-dialog .title {
+    width: 100%;
+    text-align: center;
+    padding-bottom: 1;
+    color: #d7faff;
+}
+
+#select-dialog Button, #remove-dialog Button {
+    width: 100%;
+    margin-bottom: 1;
+}
+
+/* -----------------------------------------
+ * 終了ボタン
+ * ----------------------------------------- */
+#quit-app {
+    background: #CC3333;
+    color: #d7faff;
+    text-style: bold;
+}
