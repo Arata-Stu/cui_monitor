@@ -313,7 +313,14 @@ WidgetSelectScreen, WidgetRemoveScreen {
 
 #select-dialog Button, #remove-dialog Button {
     width: 100%;
-    margin-bottom: 1;
+    margin-bottom: 0.3;   /* 👈 余白を小さくする */
+    height: 3;            /* 👈 高さを固定（揃える） */
+}
+
+#select-dialog Button#cancel, #remove-dialog Button#cancel {
+    margin-top: 1;        /* 👈 上に広い余白 */
+    margin-bottom: 0;     /* 👈 下の余白を削除 */
+    height: 3;
 }
 
 /* -----------------------------------------
