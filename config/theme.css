@@ -66,15 +66,15 @@ Screen {
 }
 
 .hz #toolbar Label {
+    width: 1fr;
+    text-align: left;
     color: #ffaa3b;
     text-style: bold;
-    width: auto;             /* ← 幅固定ではなく可変に */
     padding-left: 1;
-    padding-right: 2;
 }
 
 .hz #toolbar Button {
-    margin-left: auto;       /* ← 右寄せ */
+    dock: right;              /* ✅ Textual流の右寄せ */
     min-width: 18;
     height: 3;
     border: solid #ffaa3b;
@@ -82,6 +82,7 @@ Screen {
     color: white;
     text-style: bold;
     content-align: center middle;
+    margin-left: 1;
 }
 
 .hz #toolbar Button:hover {
@@ -97,6 +98,7 @@ Screen {
     border: none;
     padding: 1;
 }
+
 .scan { border: solid #00d8ff; background: #001822; height: 100%; }
 
 #param { border: solid #ffaa3b; background: #101010; }
