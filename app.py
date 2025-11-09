@@ -3,6 +3,7 @@ import os
 import yaml
 import logging
 from textual.app import App, ComposeResult
+# 変更: Vertical をインポート
 from textual.containers import Grid, Horizontal, Vertical
 from textual.widgets import Button, Collapsible
 from widgets import WIDGET_REGISTRY
@@ -28,21 +29,18 @@ class RCDashboard(App):
     TITLE = "RC Car Dashboard"
     CONFIG_PATH = "config/default_layout.yaml"
 
-    # ----------------------------------------------------------
-    # ⌨️ ショートカットキー設定
-    # ----------------------------------------------------------
+    # ショートカットキー設定
     BINDINGS = [
         ("r", "reload", "Reload Layout"),
         ("q", "quit", "Quit"),
     ]
 
-    # ----------------------------------------------------------
-    # 🧩 レイアウト構築
-    # ----------------------------------------------------------
     def compose(self) -> ComposeResult:
         """全体レイアウト定義"""
+        
+        # 変更: 全体をVerticalコンテナで囲む
         with Vertical():
-            # メイン領域（Grid）
+            # メイングリッド領域
             with Grid(id="main-grid"):
                 yield DefaultView()  # 初期画面
 
@@ -98,6 +96,7 @@ class RCDashboard(App):
         elif btn == "quit-app":
             self.exit()
 
+
     # ==========================================================
     # 🧩 レイアウト読み込み
     # ==========================================================
@@ -139,7 +138,6 @@ class RCDashboard(App):
         for default_view in grid.query("DefaultView"):
             await default_view.remove()
 
-        # 🔽 後で「(widget_type, mode)」に対応可能
         await self._add_widget_by_type(widget_type)
 
     async def handle_widget_remove_result(self, widget_id: str | None):
@@ -213,7 +211,7 @@ class RCDashboard(App):
             self.log(f"[Add Error] {e}")
 
     # ==========================================================
-    # 🔁 Reload / Quit
+    # 🧭 Actions
     # ==========================================================
     def action_reload(self):
         """キーバインド 'r' → すべてリセットして DefaultView に戻す"""
@@ -247,6 +245,7 @@ class RCDashboard(App):
 
         self.call_after_refresh(safe_reset)
 
+
     def action_quit(self):
         """キーバインド 'q' → 終了"""
         self.exit()
@@ -256,6 +255,8 @@ class RCDashboard(App):
 # 🏁 エントリポイント
 # ==========================================================
 if __name__ == "__main__":
+    import os
+
     # --- デバッグ用環境変数を有効化 ---
     os.environ.setdefault("TEXTUAL_DEBUG", "1")
     os.environ.setdefault("TEXTUAL_DEVTOOLS", "1")

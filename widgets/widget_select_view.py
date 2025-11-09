@@ -1,37 +1,28 @@
 from textual.app import ComposeResult, Screen
-from textual.containers import VerticalScroll, Horizontal
+from textual.containers import VerticalScroll
 from textual.widgets import Button, Static
 from widgets import WIDGET_REGISTRY
 
-
 class WidgetSelectView(Screen):
-    """Widget選択画面（Split / Tab 横並び対応）"""
+    """widgets/__init__.py のレジストリから自動生成"""
 
     def compose(self) -> ComposeResult:
+        print("WIDGET_REGISTRY in select view:", list(WIDGET_REGISTRY.keys()))
+
+        print("=== WIDGET_REGISTRY (from WidgetSelectView) ===")
+        for wid, meta in WIDGET_REGISTRY.items():
+            print(f"- {wid}: {meta['title']}")
+
         with VerticalScroll(id="select-dialog"):
             yield Static("追加するウィジェットを選択してください", classes="title")
-
-            # ✅ Textualの正しい構文: with Horizontal(): yield ...
             for wid, meta in WIDGET_REGISTRY.items():
-                title = meta["title"]
-                with Horizontal(classes="widget-select-row"):
-                    yield Static(f"📦 {title}", classes="widget-name")
-                    yield Button("🪟 Split", id=f"add-split-{wid}", variant="primary", classes="split-btn")
-                    yield Button("🗂 Tab", id=f"add-tab-{wid}", variant="success", classes="tab-btn")
-
+                yield Button(meta["title"], id=f"add-{wid}", variant="primary")
             yield Button("--- Cancel ---", id="cancel", variant="error")
 
+
     def on_button_pressed(self, event: Button.Pressed):
-        bid = event.button.id
-
-        if bid == "cancel":
+        if event.button.id == "cancel":
             self.dismiss(None)
-            return
-
-        if bid.startswith("add-split-"):
-            widget_type = bid.replace("add-split-", "")
-            self.dismiss((widget_type, "split"))
-
-        elif bid.startswith("add-tab-"):
-            widget_type = bid.replace("add-tab-", "")
-            self.dismiss((widget_type, "tab"))
+        else:
+            widget_type = event.button.id.replace("add-", "")
+            self.dismiss(widget_type)
