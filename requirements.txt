@@ -1,3 +1,4 @@
 textual
 psutil
 rich
+pyyaml
