@@ -45,17 +45,28 @@ class SysMonitorView(Widget):
         self.refresh()
 
     def get_jetson_gpu_usage(self):
+        """JetPack 6.x (L4T 36系) 向け GPU使用率取得関数"""
         try:
-            out = subprocess.check_output(
-                ["tegrastats", "--interval", "1000", "--count", "1"],
-                text=True, timeout=1
+            process = subprocess.Popen(
+                ["tegrastats", "--interval", "1000"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True
             )
-            match = re.search(r"GR3D_FREQ\s+(\d+)%", out)
+            line = process.stdout.readline()
+            process.kill()
+
+            match = re.search(r"GR3D_FREQ[: ]\s*(\d+)%", line)
             if match:
-                return match.group(1)
-        except Exception:
-            pass
+                return float(match.group(1))
+
+            # GR3D_FREQが出ない環境ではデバッグ出力
+            print(f"[DEBUG] tegrastats output (no GR3D match): {line.strip()}")
+
+        except Exception as e:
+            print(f"[DEBUG] tegrastats GPU parse error: {e}")
         return "N/A"
+
 
     def get_gpu_usage_generic(self):
         if os.path.exists("/usr/bin/nvidia-smi"):
