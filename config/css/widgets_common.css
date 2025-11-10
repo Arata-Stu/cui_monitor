@@ -1,9 +1,9 @@
 /* =========================================================
- * 🌌 RC Dashboard Theme - 2. Common Widget Styles
+ * 🌌 RC Dashboard Theme - 2. Common Widget Styles (Fixed)
  * ========================================================= */
 
 /* -----------------------------------------
- * メイングリッド領域
+ * 🌐 メイングリッド領域
  * ----------------------------------------- */
 .main-grid-area {
     grid-columns: 1fr 1fr; 
@@ -14,12 +14,96 @@
 }
 
 /* -----------------------------------------
- * 各ウィジェット共通ボーダー・背景
+ * 🧠 共通スタイル
  * ----------------------------------------- */
-.sys { border: solid #00c8ff; background: #001019; height: 100%; }
-.net { border: solid #00ff99; background: #001612; height: 100%; }
-.scan { border: solid #00d8ff; background: #001822; height: 100%; }
+.sys {
+    border: solid #00c8ff;
+    background: #001019;
+    height: 100%;
+}
 
-/* Param (Collapsible) */
-#param { border: solid #ffaa3b; background: #101010; }
-.param-col { border: solid #ffaa3b; background: #141414; height: 100%; }
+/* -----------------------------------------
+ * 🌐 Network Monitor View
+ * ----------------------------------------- */
+.net {
+    border: solid #00ff99;
+    background: #001612;
+    color: #b0ffd0;
+    height: 100%;
+    padding: 1;
+}
+
+/* Wi-Fi 行（テキストとボタンを横並び） */
+.wifi-row {
+    width: 100%;
+    height: 3;
+    margin-top: 1;
+    margin-bottom: 0;
+    align-horizontal: left;    
+    align-vertical: middle;
+    padding-right: 2;          
+}
+
+/* 左側のラベル部分 */
+.wifi-row Static {
+    width: 1fr;                
+    height: 3;
+    text-style: bold;
+    color: #b0ffd0;
+    padding-left: 1;
+}
+
+/* ボタン共通 */
+.wifi-button {
+    margin-left: 2;
+    height: 3;
+    width: 14;
+    border: solid #00ffcc;
+    text-style: bold;
+}
+
+/* Connect ボタン */
+Button.success {
+    color: #001010;
+    background: #00ffcc;
+}
+
+/* Disconnect ボタン */
+Button.error {
+    color: #ffeaea;
+    background: #802020;
+    border: solid #ff6666;
+}
+
+/* パスワード入力欄 */
+#wifi-pass {
+    border: solid #00ffaa;
+    background: #002020;
+    color: #ffffff;
+    padding: 1;
+    margin-top: 2;
+    width: 70%;
+    height: 5;
+    align-horizontal: left;
+}
+
+
+/* -----------------------------------------
+ * その他ウィジェット
+ * ----------------------------------------- */
+.scan {
+    border: solid #00d8ff;
+    background: #001822;
+    height: 100%;
+}
+
+#param {
+    border: solid #ffaa3b;
+    background: #101010;
+}
+
+.param-col {
+    border: solid #ffaa3b;
+    background: #141414;
+    height: 100%;
+}
