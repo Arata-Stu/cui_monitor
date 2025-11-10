@@ -6,7 +6,7 @@ import yaml
 from typing import Optional
 from textual.app import App, ComposeResult
 from textual.containers import Grid, Horizontal, Vertical
-from textual.widgets import Button, Collapsible, TabbedContent, TabPane
+from textual.widgets import Button, Collapsible, TabbedContent, TabPane, Footer
 
 from widgets import WIDGET_REGISTRY
 from widgets.widget_select_view import WidgetSelectView
@@ -56,6 +56,9 @@ class RCDashboard(App):
     BINDINGS = [
         ("r", "reload", "Reload Active Tab"),
         ("q", "quit", "Quit"),
+        ("t", "add_tab", "Add Tab"),           # ➕ タブ追加
+        ("a", "add_view", "Add Widget"),       # ➕ ウィジェット追加
+        ("d", "remove_view", "Remove Widget"), # ➖ ウィジェット削除
     ]
 
     def __init__(self) -> None:
@@ -80,6 +83,8 @@ class RCDashboard(App):
                 yield Button("➕ Add Widget ", id="add-view", variant="primary")
                 yield Button("➖ Remove Widget ", id="remove-view", variant="warning")
                 yield Button("🛑 Quit", id="quit-app", variant="error")
+
+        yield Footer()
 
     def on_mount(self) -> None:
         # 初期タブ登録
@@ -427,6 +432,50 @@ class RCDashboard(App):
                 self.notify(f"❌ リロード中にエラー: {e}", severity="error")
 
         self.call_after_refresh(lambda: asyncio.create_task(reset_tab()))
+
+    # ==========================================================
+    # 🎹 キーバインド アクション群
+    # ==========================================================
+    async def action_add_tab(self) -> None:
+        await self._add_tab(f"Tab {self.tab_count + 1}")
+
+    async def action_load_yaml(self) -> None:
+        yaml_path = "config/default_layout.yaml"
+        if not os.path.exists(yaml_path):
+            self.notify(f"⚠️ YAMLが見つかりません: {yaml_path}", severity="warning")
+            return
+        self.log(f"[Key] YAMLプリセットロード: {yaml_path}")
+        await self._load_preset_from_yaml(yaml_path)
+
+    async def action_add_view(self) -> None:
+        tab_id = self._get_active_tab_id()
+        if not tab_id:
+            self.notify("⚠️ アクティブなタブが見つかりません。", severity="warning")
+            return
+        self.push_screen(
+            WidgetSelectView(),
+            lambda wid_type: self._handle_add_view(tab_id, wid_type)
+        )
+
+    async def action_remove_view(self) -> None:
+        tab_id = self._get_active_tab_id()
+        if not tab_id:
+            self.notify("⚠️ アクティブなタブが見つかりません。", severity="warning")
+            return
+
+        widgets = self.tab_manager.list_widgets(tab_id)
+        if not widgets:
+            self.notify("⚠️ このタブには削除できるViewがありません。", severity="warning")
+            return
+        
+        widget_list = []
+        for w in widgets:
+            title = getattr(w, "border_title", None) or getattr(w, "title", None) or w.id
+            widget_list.append((title, w.id))
+        self.push_screen(
+            WidgetRemoveView(widget_list),
+            lambda wid: self._handle_remove_view(tab_id, wid)
+        )
 
 
 # ==========================================================
