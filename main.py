@@ -22,7 +22,13 @@ logger = logging.getLogger(__name__)
 # 🏎️ メインアプリ
 # ==========================================================
 class RCDashboard(App, DashboardActions):
-    CSS_PATH = "config/theme.css"
+    CSS_PATH = [
+        "config/css/base.css",
+        "config/css/widgets_common.css",
+        "config/css/script_launcher.css",
+        "config/css/topic_hz.css",
+        "config/css/default_view.css"
+    ]
     TITLE = "RC Car Dashboard (Tabbed)"
     BINDINGS = [
         ("r", "reload", "Reload Active Tab"),

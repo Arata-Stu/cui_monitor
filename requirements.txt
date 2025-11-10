@@ -1,4 +1,5 @@
 textual
+textual-fspicker
 psutil
 rich
 pyyaml

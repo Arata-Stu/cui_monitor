@@ -1,0 +1,139 @@
+/* =========================================================
+ * 🌌 RC Dashboard Theme - 4. Script Launcher View
+ * ========================================================= */
+
+.launcher {
+    layout: vertical;
+    background: #001a1a;
+    border: solid #00ffcc;
+    padding: 1;
+}
+
+/* ─ タイトルバー ─ */
+.launcher #toolbar {
+    dock: top;
+    height: 3;
+    background: #002020;
+    border-bottom: solid #00ffcc;
+    align-vertical: middle;
+    padding: 0 1;
+}
+
+.launcher .title {
+    color: #00ffcc;
+    text-style: bold;
+    padding-left: 1;
+}
+
+/* ─ メイン左右レイアウト ─ */
+.launcher #main-layout {
+    layout: horizontal;
+    height: 1fr;
+    width: 100%;
+    background: #001a1a;
+    padding: 0;
+}
+
+/* ─ 左ペイン：スクリプト一覧 ─ */
+/* (元のCSSに #script-list の定義がありませんでしたが、
+   もしある場合はここに追加します) */
+
+.launcher .script-card {
+    layout: horizontal;
+    width: 100%;
+    height: 3;
+    align-horizontal: left;
+    align-vertical: middle;
+    border: none;
+    background: transparent;
+    margin-bottom: 1;
+    padding: 0;
+}
+
+/* ▶ 実行ボタン */
+.launcher .script-run-button {
+    width: 50%;
+    height: 3;
+    padding: 0 1;
+    margin-right: 0;                 
+    border: solid #00ffcc;
+    background: #003030;
+    color: #d7faff;
+    text-style: bold;
+    content-align: left middle;
+}
+.launcher .script-run-button:hover {
+    background: #00ffcc;
+    color: black;
+}
+
+/* 🛑 停止ボタン */
+.launcher .script-stop-button {
+    width: 15%;
+    height: 3;
+    padding: 0 1;
+    margin-right: 0;                 
+    border: solid #ff6666;
+    background: #330000;
+    color: #ff8888;
+    text-style: bold;
+    content-align: center middle;
+}
+.launcher .script-stop-button:hover {
+    background: #ff4444;
+    color: white;
+}
+
+/* ステータス（右端に固定） */
+.launcher .script-status {
+    width: 20%;
+    text-align: right;
+    color: #99ffdd;
+    height: 3;
+    padding: 0 1;
+    min-width: 8;
+}
+
+/* 右ペイン：ログ表示 */
+.launcher #log-box {
+    width: 70%;
+    height: 100%;
+    background: #000a0a;
+    border: solid #003030;
+    padding: 1;
+    overflow-y: auto;
+}
+
+/* ─ 入力バー ─ */
+.launcher #input-bar {
+    layout: horizontal;
+    height: 3;
+    background: #001010;
+    border-top: solid #004040;
+    padding: 0 1;
+}
+
+.launcher #input-box {
+    width: 1fr;
+    height: 3;
+    border: solid #004040;
+    background: #000c0c;
+    color: #00ffcc;
+    padding: 0 1;
+}
+
+.launcher #input-bar Button {
+    height: 3;
+    padding: 0 2;
+    margin-left: 1;
+    background: #004c4c;
+    color: #00ffcc;
+    border: solid #00ffcc;
+    text-style: bold;
+    content-align: center middle;
+}
+
+.launcher #input-bar Button:hover {
+    background: #00ffcc;
+    color: black;
+}
