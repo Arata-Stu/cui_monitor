@@ -14,8 +14,9 @@ Screen {
 /* -----------------------------------------
  * メイングリッド領域
  * ----------------------------------------- */
-#main-grid {
-    grid-size: 2;
+.main-grid-area {
+
+    grid-columns: 1fr 1fr; 
     grid-gutter: 1;
     width: 100%;
     height: 1fr;
@@ -103,115 +104,129 @@ Screen {
 
 #param { border: solid #ffaa3b; background: #101010; }
 .param-col { border: solid #ffaa3b; background: #141414; height: 100%; }
-
 /* -----------------------------------------
- * Script Launcher View（改良版）
+ * Script Launcher View（左右分割・コンパクト行レイアウト版）
  * ----------------------------------------- */
 .launcher {
-    border: solid #00ffcc;
-    background: #001a1a;
-    padding: 1;
     layout: vertical;
+    background: #001a1a;
+    border: solid #00ffcc;
+    padding: 1;
 }
 
-/* タイトルバー */
+/* ─ タイトルバー ─ */
 .launcher #toolbar {
     dock: top;
     height: 3;
     background: #002020;
     border-bottom: solid #00ffcc;
-    padding: 0 1;
     align-vertical: middle;
+    padding: 0 1;
 }
 
 .launcher .title {
     color: #00ffcc;
     text-style: bold;
-    padding: 0 1;
-    width: 1fr;
+    padding-left: 1;
 }
 
-/* ─ グリッドレイアウト ─ */
-.launcher .script-grid {
-    grid-size: 2;
-    grid-gutter: 1;    /* 小数不可 */
+/* ─ メイン左右レイアウト ─ */
+.launcher #main-layout {
+    layout: horizontal;
+    height: 1fr;
     width: 100%;
-    height: auto;
-    padding: 0 1;
+    background: #001a1a;
+    padding: 0;
 }
 
-/* ─ スクリプトカード ─ */
 .launcher .script-card {
-    border: solid #004c4c;
-    background: #002020;
-    padding: 0 1;
-    height: auto;
-    layout: vertical;
-    border: round;
+    layout: horizontal;
+    width: 100%;
+    height: 3;
+    align-horizontal: left;
+    align-vertical: middle;
+    border: none;
+    background: transparent;
+    margin-bottom: 1;
+    padding: 0;
 }
 
-.launcher .script-run-button,
-.launcher .script-stop-button {
-    width: 100%;
-    height: auto;           /* ← 高さを自動調整 */
-    min-height: 3;          /* ← 最小高さを確保 */
-    padding: 1;             /* ← 余白を確保 */
-    margin-bottom: 1;
-    background: #004c4c;
+/* ▶ 実行ボタン */
+.launcher .script-run-button {
+    width: 50%;
+    height: 3;
+    padding: 0 1;
+    margin-right: 0;                 
     border: solid #00ffcc;
-    content-align: left middle;
+    background: #003030;
     color: #d7faff;
     text-style: bold;
-    
-    /* ▼ テキスト折り返しを有効化 ▼ */
-    text-wrap: wrap;        /* ← 'wrap' のみ有効 */
+    content-align: left middle;
+}
+.launcher .script-run-button:hover {
+    background: #00ffcc;
+    color: black;
 }
 
-
-/* ─ 状態ラベル ─ */
-.launcher .script-status {
-    width: 100%;
-    text-align: center;
-    background: #001f1f;
-    height: 2;
+/* 🛑 停止ボタン */
+.launcher .script-stop-button {
+    width: 15%;
+    height: 3;
     padding: 0 1;
-    border: none;
-    color: #99ffdd;
+    margin-right: 0;                 
+    border: solid #ff6666;
+    background: #330000;
+    color: #ff8888;
+    text-style: bold;
+    content-align: center middle;
+}
+.launcher .script-stop-button:hover {
+    background: #ff4444;
+    color: white;
 }
 
-/* ─ ログエリア ─ */
+/* ステータス（右端に固定） */
+.launcher .script-status {
+    width: 20%;
+    text-align: right;
+    color: #99ffdd;
+    height: 3;
+    padding: 0 1;
+    min-width: 8;
+}
+
+/* 右ペイン：ログ表示 */
 .launcher #log-box {
-    height: 1fr;
+    width: 70%;
+    height: 100%;
     background: #000a0a;
     border: solid #003030;
-    margin-top: 1;
-    margin-bottom: 1;
     padding: 1;
-    overflow: auto;
+    overflow-y: auto;
 }
 
 /* ─ 入力バー ─ */
 .launcher #input-bar {
+    layout: horizontal;
     height: 3;
-    background: transparent;
-    border: none;
+    background: #001010;
+    border-top: solid #004040;
+    padding: 0 1;
 }
 
-/* 入力欄 */
 .launcher #input-box {
-    height: 3;
     width: 1fr;
+    height: 3;
     border: solid #004040;
-    background: #001010;
+    background: #000c0c;
     color: #00ffcc;
     padding: 0 1;
 }
 
-/* Clear Log ボタン */
 .launcher #input-bar Button {
-    padding: 0 3;
-    margin-left: 1;
     height: 3;
+    padding: 0 2;
+    margin-left: 1;
     background: #004c4c;
     color: #00ffcc;
     border: solid #00ffcc;
@@ -222,9 +237,9 @@ Screen {
 .launcher #input-bar Button:hover {
     background: #00ffcc;
     color: black;
-    text-style: bold;
-    border: solid #00ffcc;
 }
+
+
 
 /* -----------------------------------------
  * DefaultView
@@ -411,4 +426,3 @@ TabPane {
     background: #ff4444;
     color: black;
 }
-

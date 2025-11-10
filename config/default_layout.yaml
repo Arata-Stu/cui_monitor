@@ -1,5 +1,9 @@
-# 起動時に自動ロードされるウィジェット群
-widgets:
-  - id: "sys"
-  - id: "hz"
-  - id: "net"
+tabs:
+  - title: "Main"
+    widgets:
+      - type: "sys"
+      - type: "launcher"
+  - title: "Tools"
+    widgets:
+      - type: "launcher"
+
