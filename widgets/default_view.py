@@ -1,6 +1,8 @@
 from textual.app import ComposeResult
 from textual.containers import Vertical, Center
 from textual.widgets import Button, Static, Label
+from textual import on
+
 
 WIDGET_META = {
     "id": "default",
@@ -14,6 +16,12 @@ WIDGET_META = {
 
 class DefaultView(Static):
     """アプリ起動時に表示されるデフォルトビュー"""
+
+    @on(Button.Pressed)
+    def forward_button_to_app(self, event: Button.Pressed) -> None:
+        """DefaultView内ボタンをAppへ転送"""
+        event.stop()
+        self.app.post_message(event)
 
     def compose(self) -> ComposeResult:
         with Center():

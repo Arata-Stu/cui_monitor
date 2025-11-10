@@ -14,10 +14,13 @@ WIDGET_META = {
     "title": "Script Launcher View",
     "class_name": "launcher",
     "category": "system",
-    "description": "複数スクリプトを並列実行・中断・監視します（対話入力＋ログクリア対応）。",
+    "description": "複数スクリプトを並列実行・中断・監視します（対話入力＋安全停止対応）。",
     "order": 50,
 }
 
+# =========================================================
+# スクリプト管理クラス
+# =========================================================
 class ScriptTask:
     """各スクリプトの状態を保持"""
     def __init__(self, path: Path):
@@ -25,6 +28,10 @@ class ScriptTask:
         self.process: asyncio.subprocess.Process | None = None
         self.status: str = "IDLE"
 
+
+# =========================================================
+# ScriptLauncherView 本体
+# =========================================================
 class ScriptLauncherView(Widget):
     """複数スクリプトを非同期で管理できるランチャー"""
     tasks: dict[str, ScriptTask] = reactive({})
@@ -62,7 +69,7 @@ class ScriptLauncherView(Widget):
         await self.safe_update_buttons()
 
     # =========================================================
-    # UI更新（強化）
+    # UI更新
     # =========================================================
     async def safe_update_buttons(self, retries=3):
         """UI更新を安全に再試行つきで実行"""
@@ -113,8 +120,12 @@ class ScriptLauncherView(Widget):
             self.safe_clear_log(); return
 
         name = None
-        if bid.startswith("run-"):  name = bid[4:].replace("_", "."); asyncio.create_task(self.start_script(name))
-        elif bid.startswith("stop-"): name = bid[5:].replace("_", "."); asyncio.create_task(self.stop_script(name))
+        if bid.startswith("run-"):
+            name = bid[4:].replace("_", ".")
+            asyncio.create_task(self.start_script(name))
+        elif bid.startswith("stop-"):
+            name = bid[5:].replace("_", ".")
+            asyncio.create_task(self.stop_script(name))
 
     # =========================================================
     # スクリプト実行処理
@@ -133,7 +144,7 @@ class ScriptLauncherView(Widget):
             task.process = await asyncio.create_subprocess_exec(
                 "bash", str(task.path),
                 stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT, preexec_fn=lambda: os.setpgrp(),
+                stderr=asyncio.subprocess.STDOUT, preexec_fn=os.setpgrp,
             )
             asyncio.create_task(self._read_output(task, name))
             asyncio.create_task(self._wait_for_exit(task, name))
@@ -143,7 +154,6 @@ class ScriptLauncherView(Widget):
             await self.safe_update_buttons()
 
     async def _read_output(self, task: ScriptTask, name: str):
-        """標準出力を非同期で読み取る"""
         try:
             while task.process:
                 try:
@@ -193,7 +203,7 @@ class ScriptLauncherView(Widget):
             self.safe_log(f"[ERROR] 入力送信失敗: {e}")
 
     # =========================================================
-    # 停止処理
+    # 停止処理（安全kill）
     # =========================================================
     async def stop_script(self, name: str):
         task = self.tasks.get(name)
@@ -209,32 +219,30 @@ class ScriptLauncherView(Widget):
                 await self.safe_update_buttons()
                 return
 
-            # ✅ stdin を安全に閉じる
+            # stdinを閉じる
             try:
                 if proc.stdin:
                     proc.stdin.close()
             except Exception as e:
                 self.safe_log(f"[WARN] stdin close失敗: {e}")
 
-            # ✅ プロセスグループID取得
+            # プロセスグループ取得
             try:
                 pgid = os.getpgid(pid)
             except ProcessLookupError:
-                pgid = pid  # fallback
+                pgid = pid
 
-            # ✅ シグナルを順に送信（INT → TERM → KILL）
+            # SIGINT→TERM→KILL
             for sig in [signal.SIGINT, signal.SIGTERM, signal.SIGKILL]:
                 try:
                     os.killpg(pgid, sig)
                 except ProcessLookupError:
                     break
-                except PermissionError:
-                    os.kill(pid, sig)  # fallback
                 await asyncio.sleep(0.3)
                 if proc.returncode is not None:
                     break
 
-            # ✅ 最後に wait() で回収
+            # wait回収
             try:
                 await asyncio.wait_for(proc.wait(), timeout=1.5)
             except Exception:
@@ -250,19 +258,24 @@ class ScriptLauncherView(Widget):
             task.process = None
             await self.safe_update_buttons()
 
-
+    # =========================================================
+    # 🔹 全停止（reloadや終了時に使用）
+    # =========================================================
+    async def stop_all_scripts(self):
+        running = [n for n, t in self.tasks.items() if t.process and t.status == "RUNNING"]
+        if not running:
+            return
+        self.safe_log(f"[INFO] 🔻 全スクリプト停止開始: {running}")
+        for name in running:
+            await self.stop_script(name)
+        self.safe_log("[INFO] ✅ 全スクリプト停止完了")
 
     # =========================================================
     # 終了時クリーンアップ
     # =========================================================
     async def on_unmount(self):
-        for task in self.tasks.values():
-            if task.process and task.process.returncode is None:
-                try:
-                    os.killpg(os.getpgid(task.process.pid), signal.SIGTERM)
-                except Exception:
-                    pass
-        print("💤 ScriptLauncherView: 全プロセス終了")
+        await self.stop_all_scripts()
+        print("💤 ScriptLauncherView: 全プロセス停止完了")
 
     # =========================================================
     # 安全ロガー群

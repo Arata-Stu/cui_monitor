@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-import os
-import yaml
 import logging
+from typing import Optional
 from textual.app import App, ComposeResult
-# 変更: Vertical をインポート
 from textual.containers import Grid, Horizontal, Vertical
-from textual.widgets import Button, Collapsible
+from textual.widgets import Button, Collapsible, TabbedContent, TabPane
+
 from widgets import WIDGET_REGISTRY
 from widgets.widget_select_view import WidgetSelectView
 from widgets.widget_remove_view import WidgetRemoveView
@@ -13,7 +12,7 @@ from widgets.default_view import DefaultView
 
 
 # ==========================================================
-# 🔧 ログ設定（Textualデバッグも含む）
+# 🔧 ログ設定
 # ==========================================================
 logging.basicConfig(
     level=logging.DEBUG,
@@ -22,154 +21,193 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# ==========================================================
+# 🗂️ タブ管理
+# ==========================================================
+class TabManager:
+    def __init__(self) -> None:
+        self.tabs: dict[str, dict] = {}  # {tab_id: {"title": str, "widgets": [], "counter": int}}
+
+    def add_tab(self, tab_id: str, title: str) -> None:
+        self.tabs[tab_id] = {"title": title, "widgets": [], "counter": 0}
+
+    def add_widget(self, tab_id: str, widget) -> None:
+        self.tabs[tab_id]["widgets"].append(widget)
+
+    def remove_widget(self, tab_id: str, widget) -> None:
+        self.tabs[tab_id]["widgets"] = [w for w in self.tabs[tab_id]["widgets"] if w is not widget]
+
+    def list_widgets(self, tab_id: str):
+        return list(self.tabs.get(tab_id, {}).get("widgets", []))
+
+    def next_counter(self, tab_id: str) -> int:
+        self.tabs[tab_id]["counter"] += 1
+        return self.tabs[tab_id]["counter"]
+
+
+# ==========================================================
+# 🏎️ メインアプリ
+# ==========================================================
 class RCDashboard(App):
-    """RC Dashboard (DefaultView + 常時ツールバー + 安全なmount/remove対応)"""
-
     CSS_PATH = "config/theme.css"
-    TITLE = "RC Car Dashboard"
-    CONFIG_PATH = "config/default_layout.yaml"
-
-    # ショートカットキー設定
+    TITLE = "RC Car Dashboard (Tabbed)"
     BINDINGS = [
-        ("r", "reload", "Reload Layout"),
+        ("r", "reload", "Reload Active Tab"),
         ("q", "quit", "Quit"),
     ]
 
-    def compose(self) -> ComposeResult:
-        """全体レイアウト定義"""
-        
-        # 変更: 全体をVerticalコンテナで囲む
-        with Vertical():
-            # メイングリッド領域
-            with Grid(id="main-grid"):
-                yield DefaultView()  # 初期画面
+    def __init__(self) -> None:
+        super().__init__()
+        self.tab_manager = TabManager()
+        self.tab_count = 0
+        self.tabs_container: Optional[TabbedContent] = None
 
-            # 常時表示ツールバー
+    # ------------------------------------------------------------
+    # レイアウト構築
+    # ------------------------------------------------------------
+    def compose(self) -> ComposeResult:
+        with Vertical(id="root-layout"):
+            with TabbedContent(id="tabs") as tabs:
+                self.tabs_container = tabs
+
+                # 初期タブを同期生成
+                with TabPane("Tab 1", id="tab1"):
+                    with Grid(id="grid-tab1"):
+                        yield DefaultView()
+
+            # 共通ツールバー
             with Horizontal(id="toolbar"):
-                yield Button("➕ Add Widget", id="show-add-screen", variant="success")
-                yield Button("➖ Remove Widget", id="show-remove-screen", variant="warning")
-                yield Button("🗂 Load YAML", id="load-yaml", variant="primary")
+                yield Button("➕ Add Tab", id="add-tab", variant="success")
+                yield Button("➕ Add View (Active Tab)", id="add-view", variant="primary")
+                yield Button("➖ Remove View (Active Tab)", id="remove-view", variant="warning")
                 yield Button("🛑 Quit", id="quit-app", variant="error")
 
-    async def on_mount(self):
-        """アプリ起動時の初期化"""
-        self.mounted_widgets = []
-        self.widget_counter = 0
-        self.log("RCDashboard 起動完了")
+    def on_mount(self) -> None:
+        # 初期タブ登録
+        self.tab_manager.add_tab("tab1", "Tab 1")
+        self.tab_count = 1
 
-    # ==========================================================
-    # 🧭 ボタン操作系
-    # ==========================================================
-    async def on_button_pressed(self, event: Button.Pressed):
-        """ツールバーおよびDefaultViewのボタン操作"""
+        tabs = self.query_one("#tabs", TabbedContent)
+        if not getattr(tabs, "active", None):
+            tabs.active = "tab1"
+
+    # ------------------------------------------------------------
+    # 🔹 タブ追加
+    # ------------------------------------------------------------
+    async def _add_tab(self, title: str) -> None:
+        tabs = self.query_one("#tabs", TabbedContent)
+        tab_id = f"tab{self.tab_count + 1}"
+        self.tab_count += 1
+        self.tab_manager.add_tab(tab_id, title)
+
+        pane = TabPane(title, id=tab_id)
+        tabs.add_pane(pane)
+
+        def mount_contents():
+            try:
+                pane_attached = self.query_one(f"#{tab_id}", TabPane)
+                grid = Grid(id=f"grid-{tab_id}")
+                pane_attached.mount(grid)
+                grid.mount(DefaultView())
+                self.log(f"🆕 Tab追加: {title} (id={tab_id})")
+            except Exception as e:
+                self.log(f"[add_tab/mount_contents] {e}")
+
+        self.call_after_refresh(mount_contents)
+        tabs.active = tab_id
+
+    # ------------------------------------------------------------
+    # 🔹 ボタンイベント
+    # ------------------------------------------------------------
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
         btn = event.button.id
         self.log(f"[UI] Button pressed: {btn}")
 
-        # --- DefaultView 用ボタン対応 ---
+        # ===== DefaultView内のボタン =====
         if btn == "add-widget":
-            self.push_screen(WidgetSelectView(), self.handle_widget_select_result)
+            tab_id = self._get_active_tab_id()
+            if not tab_id:
+                self.notify("⚠️ アクティブなタブが見つかりません。", severity="warning")
+                return
+            self.push_screen(WidgetSelectView(), lambda wid_type: self._handle_add_view(tab_id, wid_type))
             return
 
         elif btn == "load-yaml":
-            layout = self._load_default_layout()
-            if layout:
-                await self._load_layout_widgets(layout)
-            else:
-                self.notify("⚠️ YAMLファイルが空または存在しません。", severity="warning")
+            self.notify("🗂 YAMLレイアウト読込機能は未実装です。", severity="info")
             return
 
         elif btn == "quit":
             self.exit()
             return
 
-        # --- Toolbar 用ボタン ---
-        if btn == "show-add-screen":
-            self.push_screen(WidgetSelectView(), self.handle_widget_select_result)
-
-        elif btn == "show-remove-screen":
-            if not self.mounted_widgets:
-                self.bell()
-                return
-            widget_list = [(getattr(w, "border_title", w.id), w.id) for w in self.mounted_widgets]
-            self.push_screen(WidgetRemoveView(widget_list), self.handle_widget_remove_result)
-
-        elif btn == "quit-app":
+        # ===== グローバルツールバー =====
+        if btn == "quit-app":
             self.exit()
+            return
 
+        if btn == "add-tab":
+            await self._add_tab(f"Tab {self.tab_count + 1}")
+            return
 
-    # ==========================================================
-    # 🧩 レイアウト読み込み
-    # ==========================================================
-    def _load_default_layout(self):
-        """YAMLファイルからデフォルトレイアウトを読み込む"""
-        if not os.path.exists(self.CONFIG_PATH):
-            self.log("⚠️ YAMLファイルが存在しません。")
-            return []
-        try:
-            with open(self.CONFIG_PATH, "r") as f:
-                return yaml.safe_load(f).get("widgets", [])
-        except Exception as e:
-            self.log(f"[YAML ERROR] {e}")
-            return []
+        tab_id = self._get_active_tab_id()
+        if not tab_id:
+            self.notify("⚠️ アクティブなタブが見つかりません。", severity="warning")
+            return
 
-    async def _load_layout_widgets(self, layout):
-        """YAMLの指定に基づいてウィジェットをロード"""
-        grid = self.query_one("#main-grid")
+        if btn == "add-view":
+            self.push_screen(WidgetSelectView(), lambda wid_type: self._handle_add_view(tab_id, wid_type))
+        elif btn == "remove-view":
+            widgets = self.tab_manager.list_widgets(tab_id)
+            if not widgets:
+                self.notify("⚠️ このタブには削除できるViewがありません。", severity="warning")
+                return
+            widget_list = [(getattr(w, "border_title", w.id), w.id) for w in widgets]
+            self.push_screen(WidgetRemoveView(widget_list), lambda wid: self._handle_remove_view(tab_id, wid))
 
-        # DefaultViewを削除（安全に実行）
-        for default_view in grid.query("DefaultView"):
-            await default_view.remove()
-
-        # 各ウィジェットを追加
-        for item in layout:
-            await self._add_widget_by_type(item["id"])
-        self.log("✅ YAMLレイアウトをロードしました。")
-
-    # ==========================================================
-    # 🧱 Widget追加・削除系
-    # ==========================================================
-    async def handle_widget_select_result(self, widget_type: str | None):
-        """Addモーダルからの結果"""
+    # ------------------------------------------------------------
+    # 🔹 Add / Remove View
+    # ------------------------------------------------------------
+    async def _handle_add_view(self, tab_id: str, widget_type: Optional[str]) -> None:
         if not widget_type:
             return
-        grid = self.query_one("#main-grid")
+        await self._create_widget_in_tab(tab_id, widget_type)
 
-        # DefaultView削除
-        for default_view in grid.query("DefaultView"):
-            await default_view.remove()
-
-        await self._add_widget_by_type(widget_type)
-
-    async def handle_widget_remove_result(self, widget_id: str | None):
-        """Removeモーダルからの結果"""
+    async def _handle_remove_view(self, tab_id: str, widget_id: Optional[str]) -> None:
         if not widget_id:
             return
+        grid = self.query_one(f"#grid-{tab_id}")
 
         try:
             widget = self.query_one(f"#{widget_id}")
+        except Exception:
+            self.log(f"⚠️ Viewが見つからないため内部リストのみ削除: {widget_id}")
+            self.tab_manager.tabs[tab_id]["widgets"] = [
+                w for w in self.tab_manager.list_widgets(tab_id)
+                if getattr(w, "id", None) != widget_id
+            ]
+            return
 
-            def safe_remove():
-                try:
-                    widget.remove()
-                    if widget in self.mounted_widgets:
-                        self.mounted_widgets.remove(widget)
-                    self.log(f"🗑️ ウィジェット削除: {widget_id}")
+        def safe_remove():
+            try:
+                widget.remove()
+                self.tab_manager.remove_widget(tab_id, widget)
+                if not self.tab_manager.list_widgets(tab_id):
+                    grid.mount(DefaultView())
+                self.log(f"🗑️ View削除: {widget_id} (tab={tab_id})")
+            except Exception as e:
+                self.log(f"[safe_remove] 削除エラー: {e}")
 
-                    # すべて削除後にDefaultViewを復帰
-                    if not self.mounted_widgets:
-                        grid = self.query_one("#main-grid")
-                        grid.mount(DefaultView())
-                except Exception as e:
-                    self.log(f"[safe_remove] 削除中エラー: {e}")
+        self.call_after_refresh(safe_remove)
 
-            # ✅ removeは描画後に安全実行
-            self.call_after_refresh(safe_remove)
+    # ------------------------------------------------------------
+    # 🔹 Widget生成
+    # ------------------------------------------------------------
+    async def _create_widget_in_tab(self, tab_id: str, widget_type: str) -> None:
+        """指定タブにウィジェットを追加"""
+        if widget_type.lower() in ["default", "defaultview"]:
+            self.notify("⚠️ DefaultViewは直接追加できません。", severity="warning")
+            return
 
-        except Exception as e:
-            self.log(f"[Remove Error] {e}")
-
-    async def _add_widget_by_type(self, widget_type: str):
-        """指定されたタイプのウィジェットを追加"""
         if widget_type not in WIDGET_REGISTRY:
             self.log(f"[Error] 不明なウィジェットタイプ: {widget_type}")
             return
@@ -179,76 +217,96 @@ class RCDashboard(App):
         title = info["title"]
         class_name = info["class_name"]
 
-        self.widget_counter += 1
-        wid = f"widget-{self.widget_counter}"
-        grid = self.query_one("#main-grid")
+        wid = f"{tab_id}-{widget_type}-{self.tab_manager.next_counter(tab_id)}"
+        grid = self.query_one(f"#grid-{tab_id}")
 
-        try:
-            if widget_type == "param":
-                widget = Collapsible(
-                    WidgetClass(id=f"param-inner-{self.widget_counter}"),
-                    title=f"⚙️ {title}",
-                    collapsed=False,
-                    id=wid,
-                    classes=class_name,
-                )
-            else:
-                widget = WidgetClass(id=wid, classes=class_name)
-                widget.border_title = title
+        # DefaultView削除
+        for default_view in grid.query("DefaultView"):
+            await default_view.remove()
 
-            # 安全なmount実行
-            def safe_mount():
-                try:
-                    grid.mount(widget)
-                    self.mounted_widgets.append(widget)
-                    self.log(f"✅ ウィジェット追加: {title} (ID={wid})")
-                except Exception as e:
-                    self.log(f"[safe_mount] 追加エラー: {e}")
+        # Widget生成
+        if widget_type == "param":
+            widget = Collapsible(
+                WidgetClass(id=f"param-inner-{wid}"),
+                title=f"⚙️ {title}",
+                collapsed=False,
+                id=wid,
+                classes=class_name,
+            )
+        else:
+            widget = WidgetClass(id=wid, classes=class_name)
+            widget.border_title = title
 
-            self.call_after_refresh(safe_mount)
-
-        except Exception as e:
-            self.log(f"[Add Error] {e}")
-
-    # ==========================================================
-    # 🧭 Actions
-    # ==========================================================
-    def action_reload(self):
-        """キーバインド 'r' → すべてリセットして DefaultView に戻す"""
-        self.log("🔁 Reload triggered: Reset to DefaultView")
-
-        grid = self.query_one("#main-grid")
-
-        # --- DefaultView を削除（もし複数存在しても安全に全削除） ---
-        for view in grid.query("DefaultView"):
+        def safe_mount():
             try:
-                view.remove()
+                grid.mount(widget)
+                self.tab_manager.add_widget(tab_id, widget)
+                self.log(f"✅ View追加: {title} (id={wid}, tab={tab_id})")
             except Exception as e:
-                self.log(f"[Reload] DefaultView remove failed: {e}")
+                self.log(f"[safe_mount] 追加エラー: {e}")
 
-        # --- すべてのウィジェットを削除 ---
-        for widget in list(self.mounted_widgets):
+        self.call_after_refresh(safe_mount)
+
+    # ------------------------------------------------------------
+    # 🔹 Actions（修正版）
+    # ------------------------------------------------------------
+    def action_reload(self) -> None:
+        tab_id = self._get_active_tab_id()
+        if not tab_id:
+            self.bell()
+            return
+
+        grid = self.query_one(f"#grid-{tab_id}")
+
+        # 🧩【追加】ScriptLauncherView があれば全停止
+        for view in grid.query("ScriptLauncherView"):
             try:
-                widget.remove()
+                self.log("🧹 ScriptLauncherView リロード前に全スクリプト停止実行")
+                self.call_later(asyncio.create_task, view.stop_all_scripts())
             except Exception as e:
-                self.log(f"[Reload] Widget remove failed: {e}")
-        self.mounted_widgets.clear()
+                self.log(f"[WARN] stop_all_scripts呼び出し失敗: {e}")
 
-        # --- DefaultView を再マウント ---
+        # 🩹 DefaultViewを削除（重複防止）
+        for default_view in grid.query("DefaultView"):
+            default_view.remove()
+
+        # 🧹 grid配下の全Widgetを削除
+        for child in list(grid.children):
+            try:
+                child.remove()
+            except Exception as e:
+                self.log(f"[Reload] 子要素削除エラー: {e}")
+
+        # 🧭 tab_manager の該当タブの widget list を初期化
+        self.tab_manager.tabs[tab_id]["widgets"].clear()
+
+        # 🪄 再描画
         def safe_reset():
             try:
                 grid.mount(DefaultView())
-                self.log("✅ DefaultView 再マウント完了")
-                self.notify("🔁 Reset to DefaultView", timeout=2)
+                self.notify(f"🔁 Reset {self.tab_manager.tabs[tab_id]['title']}", timeout=2)
             except Exception as e:
                 self.log(f"[Reload] DefaultView mount failed: {e}")
 
         self.call_after_refresh(safe_reset)
 
 
-    def action_quit(self):
-        """キーバインド 'q' → 終了"""
+
+    def action_quit(self) -> None:
         self.exit()
+
+    # ------------------------------------------------------------
+    # 🔹 Helper
+    # ------------------------------------------------------------
+    def _get_active_tab_id(self) -> Optional[str]:
+        try:
+            tabs = self.query_one("#tabs", TabbedContent)
+            active = getattr(tabs, "active", None)
+            if not active:
+                return "tab1" if "tab1" in self.tab_manager.tabs else None
+            return active if isinstance(active, str) else getattr(active, "id", None)
+        except Exception:
+            return None
 
 
 # ==========================================================
@@ -256,10 +314,6 @@ class RCDashboard(App):
 # ==========================================================
 if __name__ == "__main__":
     import os
-
-    # --- デバッグ用環境変数を有効化 ---
     os.environ.setdefault("TEXTUAL_DEBUG", "1")
     os.environ.setdefault("TEXTUAL_DEVTOOLS", "1")
-
-    # --- 起動 ---
     RCDashboard().run()

@@ -324,3 +324,91 @@ WidgetSelectScreen, WidgetRemoveScreen {
     color: #d7faff;
     text-style: bold;
 }
+
+/* =========================================================
+ * 🧭 Tabbed Layout + Bottom Toolbar 対応 (RCDashboard)
+ * ========================================================= */
+
+/* 全体レイアウトルート */
+#root-layout {
+    layout: vertical;
+    height: 100%;
+}
+
+/* タブ領域（上部） */
+#tabs {
+    height: 1fr;                     /* 上部タブ領域を可変に */
+    border-bottom: solid #0070a0;
+    background: #0b1016;
+}
+
+/* タブ内部のペイン（各タブ） */
+TabPane {
+    background: #0b1016;
+    color: #d7faff;
+    padding: 1;
+}
+
+/* 下部ツールバー */
+#toolbar {
+    dock: bottom;
+    height: 3;
+    background: #081018;
+    border-top: solid #0070a0;
+    padding: 0 2;
+    align-horizontal: left;
+    align-vertical: middle;
+}
+
+/* ツールバー内ボタン */
+#toolbar Button {
+    margin-right: 1;
+    height: 3;
+    padding: 0 1;
+    min-width: 16;
+    text-style: bold;
+}
+
+#toolbar Button:hover {
+    background: #007acc;
+    color: white;
+}
+
+/* Addボタン緑色 */
+#add-tab,
+#add-view {
+    background: #007a3b;
+    color: #fff;
+    border: solid #009944;
+}
+
+#add-tab:hover,
+#add-view:hover {
+    background: #00cc55;
+    color: black;
+}
+
+/* Removeボタン橙色 */
+#remove-view {
+    background: #aa6600;
+    color: #fff;
+    border: solid #ffaa00;
+}
+
+#remove-view:hover {
+    background: #ffaa00;
+    color: black;
+}
+
+/* Quitボタン赤色 */
+#quit-app {
+    background: #cc3333;
+    color: #fff;
+    border: solid #ff4444;
+}
+
+#quit-app:hover {
+    background: #ff4444;
+    color: black;
+}
+
