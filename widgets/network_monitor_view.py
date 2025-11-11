@@ -11,10 +11,10 @@ from textual.widgets import Button, Input, Static
 
 WIDGET_META = {
     "id": "net",
-    "title": "Network Monitor View (Linux)",
+    "title": "Advanced Network Monitor",
     "class_name": "net",
     "category": "system",
-    "description": "nmcliを用いたWi-Fiスキャン・接続・切断を行うネットワークモニタ。",
+    "description": "複数Wi-Fi/有線インタフェース対応ネットワークモニタ（nmcliベース）",
     "order": 20,
 }
 
@@ -23,7 +23,6 @@ WIDGET_META = {
 # 🛰️ RSSIユーティリティ
 # ==========================================================
 def _rssi_to_bar(rssi: int, width: int = 5) -> str:
-    """RSSI値(0〜100)を棒グラフ表示に変換"""
     try:
         rssi = int(rssi)
     except Exception:
@@ -33,12 +32,39 @@ def _rssi_to_bar(rssi: int, width: int = 5) -> str:
 
 
 # ==========================================================
+# 🌐 ネットワーク列挙
+# ==========================================================
+async def list_interfaces():
+    """nmcliからWi-Fiインタフェース一覧を取得"""
+    proc = await asyncio.create_subprocess_shell(
+        "nmcli -t -f DEVICE,TYPE,STATE dev status",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    out, _ = await proc.communicate()
+    lines = out.decode().splitlines()
+
+    interfaces = {"wifi": [], "ethernet": []}
+    for line in lines:
+        parts = line.strip().split(":")
+        if len(parts) < 3:
+            continue
+        dev, typ, state = parts[:3]
+        if typ == "wifi":
+            interfaces["wifi"].append((dev, state))
+        elif typ == "ethernet":
+            interfaces["ethernet"].append((dev, state))
+    return interfaces
+
+
+# ==========================================================
 # 🌐 Wi-Fiスキャン（nmcli）
 # ==========================================================
-async def scan_wifi_networks(limit: int = 10):
-    """nmcliを使用してWi-Fi一覧を取得"""
+async def scan_wifi_networks(interface: str, limit: int = 10):
+    """指定インタフェースでWi-Fi一覧を取得"""
+    cmd = f"nmcli -t -f SSID,SIGNAL,SECURITY dev wifi list ifname {interface}"
     proc = await asyncio.create_subprocess_shell(
-        "nmcli -t -f SSID,SIGNAL,SECURITY dev wifi list",
+        cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.DEVNULL,
     )
@@ -58,28 +84,19 @@ async def scan_wifi_networks(limit: int = 10):
     return networks[:limit]
 
 
-# ==========================================================
-# 🌐 Wi-Fi接続/切断（nmcli）
-# ==========================================================
-async def connect_wifi(ssid: str, password: str) -> bool:
-    """Wi-Fi接続処理"""
-    cmd = f"nmcli dev wifi connect '{ssid}' password '{password}'"
+async def connect_wifi(interface: str, ssid: str, password: str) -> bool:
+    cmd = f"nmcli dev wifi connect '{ssid}' password '{password}' ifname {interface}"
     proc = await asyncio.create_subprocess_shell(
-        cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+        cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
     )
     _, err = await proc.communicate()
     return proc.returncode == 0 and not err
 
 
-async def disconnect_wifi() -> bool:
-    """Wi-Fi切断処理"""
-    cmd = "nmcli con down id $(nmcli -t -f NAME con show --active | head -n 1)"
+async def disconnect_wifi(interface: str) -> bool:
+    cmd = f"nmcli dev disconnect {interface}"
     proc = await asyncio.create_subprocess_shell(
-        cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+        cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
     )
     await proc.communicate()
     return proc.returncode == 0
@@ -89,19 +106,18 @@ async def disconnect_wifi() -> bool:
 # 🌐 NetworkMonitorView (Textual)
 # ==========================================================
 class NetworkMonitorView(Widget):
-    """Wi-Fiスキャン・接続およびネットワーク状態を監視"""
+    """複数Wi-Fi/有線インタフェース監視"""
 
-    wifi_list = reactive([])
-    ip_address = reactive("N/A")
+    interfaces = reactive({})
+    wifi_lists = reactive({})
+    ip_info = reactive({})
+    active_iface = reactive(None)
     active_ssid = reactive(None)
-    scanning_active = reactive(False)
 
     def compose(self) -> ComposeResult:
         yield Static("🌐 [b]Network Monitor[/b]", id="net-title")
         self.ip_label = Static("IP: [cyan]N/A[/]", id="net-ip")
         yield self.ip_label
-
-        yield Static("📶 [b]Available Wi-Fi Networks[/b]:", id="wifi-title")
 
         self.wifi_container = Vertical(id="wifi-container")
         yield self.wifi_container
@@ -110,53 +126,73 @@ class NetworkMonitorView(Widget):
         yield self.input_password
 
     async def on_mount(self):
-        """UI構築完了後の初期化"""
-        self.set_interval(5.0, self.update_network)
+        self.set_interval(10.0, self.update_status)
         asyncio.create_task(self._delayed_start())
 
     async def _delayed_start(self):
         await asyncio.sleep(0.5)
-        await self.update_wifi_list()
+        await self.update_status()
 
     # -----------------------------
-    # ネットワーク情報更新
+    # ネットワーク状態更新
     # -----------------------------
-    async def update_network(self):
-        """IPアドレス更新"""
-        try:
-            for iface, addrs in psutil.net_if_addrs().items():
-                for a in addrs:
-                    if a.family.name == "AF_INET" and not iface.startswith("lo"):
-                        self.ip_address = a.address
-                        self.ip_label.update(f"IP: [cyan]{self.ip_address}[/]")
-                        return
-        except Exception:
-            self.ip_label.update("IP: [red]N/A[/]")
-
-    async def update_wifi_list(self):
-        """Wi-Fiスキャン"""
-        self.scanning_active = True
-        nets = await scan_wifi_networks()
-        self.wifi_list = nets or [("No Network Found", 0, "N/A", False)]
-        self.scanning_active = False
+    async def update_status(self):
+        self.interfaces = await list_interfaces()
+        self.ip_info = self._get_ip_addresses()
+        await self.update_wifi_lists()
         self.refresh_wifi_container()
 
+    def _get_ip_addresses(self):
+        """インタフェースごとのIPを取得"""
+        ip_map = {}
+        for iface, addrs in psutil.net_if_addrs().items():
+            for a in addrs:
+                if a.family.name == "AF_INET":
+                    ip_map[iface] = a.address
+        return ip_map
+
+    async def update_wifi_lists(self):
+        """Wi-Fiインタフェースごとのスキャン"""
+        wifi_lists = {}
+        for iface, _ in self.interfaces.get("wifi", []):
+            wifi_lists[iface] = await scan_wifi_networks(iface)
+        self.wifi_lists = wifi_lists
+
+    # -----------------------------
+    # UI構築
+    # -----------------------------
     def refresh_wifi_container(self):
-        """Wi-Fiリスト更新"""
         container = self.query_one("#wifi-container", Vertical)
         container.remove_children()
 
-        for ssid, rssi, sec, connected in self.wifi_list:
-            bar = _rssi_to_bar(rssi)
-            label = Static(f"{ssid:20s} RSSI: {rssi:>3}% {bar} Sec: {sec}")
-            button = Button(
-                "Disconnect" if connected else "Connect",
-                id=f"{'disconnect' if connected else 'connect'}-{ssid}",
-                variant="error" if connected else "success",
-                classes="wifi-button"
-            )
-            row = Horizontal(label, button, classes="wifi-row")
-            container.mount(row)
+        # 有線表示
+        eth_list = self.interfaces.get("ethernet", [])
+        if eth_list:
+            container.mount(Static("🧩 [b]Ethernet Interfaces[/b]", classes="section-title"))
+            for iface, state in eth_list:
+                ip = self.ip_info.get(iface, "N/A")
+                label = Static(f"{iface:10s} [{state}] IP: {ip}")
+                container.mount(label)
+
+        # Wi-Fi表示
+        wifi_list = self.interfaces.get("wifi", [])
+        if wifi_list:
+            container.mount(Static("📶 [b]Wi-Fi Interfaces[/b]", classes="section-title"))
+            for iface, state in wifi_list:
+                ip = self.ip_info.get(iface, "N/A")
+                container.mount(Static(f"▶ {iface} [{state}] IP: {ip}"))
+                nets = self.wifi_lists.get(iface, [])
+                for ssid, rssi, sec, connected in nets:
+                    bar = _rssi_to_bar(rssi)
+                    label = Static(f"  {ssid:18s} RSSI:{rssi:>3}% {bar} Sec:{sec}")
+                    button = Button(
+                        "Disconnect" if connected else "Connect",
+                        id=f"{'disconnect' if connected else 'connect'}-{iface}-{ssid}",
+                        variant="error" if connected else "success",
+                        classes="wifi-button"
+                    )
+                    row = Horizontal(label, button, classes="wifi-row")
+                    container.mount(row)
 
         self.refresh(layout=True)
 
@@ -167,29 +203,34 @@ class NetworkMonitorView(Widget):
     async def handle_button(self, event: Button.Pressed):
         btn = event.button
         if btn.id.startswith("connect-"):
-            ssid = btn.id.replace("connect-", "")
-            self.active_ssid = ssid
-            self.notify(f"🔑 Enter password for {ssid}")
+            _, iface, ssid = btn.id.split("-", 2)
+            self.active_iface, self.active_ssid = iface, ssid
+            self.notify(f"🔑 Enter password for {ssid} ({iface})")
             self.input_password.focus()
         elif btn.id.startswith("disconnect-"):
-            self.notify("📴 Disconnecting Wi-Fi...")
-            await disconnect_wifi()
-            await self.update_wifi_list()
+            _, iface, ssid = btn.id.split("-", 2)
+            self.notify(f"📴 Disconnecting {iface} from {ssid}...")
+            await disconnect_wifi(iface)
+            await self.update_status()
 
     @on(Input.Submitted)
     async def handle_password_submit(self, event: Input.Submitted):
         password = event.value.strip()
+        iface = self.active_iface
         ssid = self.active_ssid
-        event.input.value = ""  # 即クリア
+        event.input.value = ""
 
+        if not (iface and ssid):
+            self.notify("⚠️ No target selected", severity="warning")
+            return
         if not password:
-            self.notify("⚠️ Password is empty", severity="warning")
+            self.notify("⚠️ Password empty", severity="warning")
             return
 
-        self.notify(f"🔗 Connecting to {ssid}...")
-        ok = await connect_wifi(ssid, password)
+        self.notify(f"🔗 Connecting {iface} → {ssid} ...")
+        ok = await connect_wifi(iface, ssid, password)
         if ok:
-            self.notify(f"✅ Connected to {ssid}", severity="info")
+            self.notify(f"✅ Connected to {ssid} on {iface}", severity="info")
         else:
-            self.notify(f"❌ Failed to connect {ssid}", severity="error")
-        await self.update_wifi_list()
+            self.notify(f"❌ Failed to connect {ssid} on {iface}", severity="error")
+        await self.update_status()
