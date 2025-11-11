@@ -2,8 +2,11 @@ tabs:
   - title: "Main"
     widgets:
       - type: "sys"
-      - type: "launcher"
-  - title: "Tools"
+      - type: "net"
+  - title: "scan"
+    widgets:
+      - type: "scan"
+  - title: "scripts"
     widgets:
       - type: "launcher"
 

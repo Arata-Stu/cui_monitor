@@ -110,7 +110,17 @@
 .scan {
     border: solid #00d8ff;
     background: #001822;
-    height: 100%;
+
+    /* 高さ基準の正方形比率 */
+    width: 90vh;
+    height: 90vh;
+
+    align-horizontal: center;
+    align-vertical: middle;
+
+    margin-top: 1;
+    margin-bottom: 1;
+    padding: 1;
 }
 
 #param {
