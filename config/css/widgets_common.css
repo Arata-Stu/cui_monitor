@@ -50,6 +50,7 @@
 /* -----------------------------------------
  * 🌐 Hotspotボタン (レイアウトのみ)
  * ----------------------------------------- */
+/* ホットスポット切り替え行全体 */
 #hotspot-row {
     width: 100%;
     height: 3; 
@@ -58,38 +59,40 @@
     margin-bottom: 1;
 }
 
+/* ラベル ("Hotspot (Linux):") */
 #hotspot-row Static {
     width: auto;
     height: 100%;
     margin-right: 2; 
 }
 
-/* ホットスポットのON/OFFボタン (レイアウトのみ) */
-/* 色はグローバルな Button, Button.success, Button.error を使う */
+/*
+ * 💡 ホットスポットのON/OFFボタンのスタイル
+ */
 #hotspot-row Button {
     width: 10; 
     height: 100%;
     margin-right: 1;
+    background: #333333; /* 暗いグレー */
+    color: #aaaaaa;
+    border: solid #777777;
 }
 
-
 /*
- * "variant=success" (アクティブON, Connect等)
- * グローバルなスタイル (緑)
+ * 💡 ホットスポットの"ON"ボタン (variant="success")
  */
-Button.success {
+#hotspot-row Button.success {
     color: #001010;
-    background: #00ffcc;
+    background: #00ffcc; /* 緑系の色 */
     border: solid #00ffcc;
 }
 
 /*
- * "variant=error" (アクティブOFF, Disconnect等)
- * グローバルなスタイル (赤)
+ * 💡 ホットスポットの"OFF"ボタン (variant="error")
  */
-Button.error {
+#hotspot-row Button.error {
     color: #ffeaea;
-    background: #802020;
+    background: #802020; /* 赤色 */
     border: solid #ff6666;
 }
 
