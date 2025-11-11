@@ -1,5 +1,9 @@
 textual
+textual-dev
 textual-fspicker
+rich-pixels
+pillow
+plotext
 psutil
 rich
 pyyaml

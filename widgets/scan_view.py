@@ -1,6 +1,17 @@
-import math, asyncio, os, random
+#!/usr/bin/env python3
+import math
+import asyncio
+import os
+import random
+from datetime import datetime
+from typing import List, Tuple
+
 from textual.widget import Widget
 from textual.reactive import reactive
+
+# ✅ 旧Textual対応: rich-pixels使用
+from rich_pixels import Pixels
+from PIL import Image, ImageDraw
 
 # ROS2依存
 try:
@@ -11,21 +22,25 @@ try:
 except ImportError:
     ROS_AVAILABLE = False
 
+
 WIDGET_META = {
     "id": "scan",
     "title": "Scan View",
     "class_name": "scan",
     "category": "sensor",
-    "description": "LiDARや距離センサのスキャンデータをテキストベースで可視化します。",
+    "description": "LiDARや距離センサのスキャンデータを画像レンダリングして表示します。",
     "order": 40,
 }
+
 
 class ScanView(Widget):
     """LaserScan BEV可視化 (ROS2対応 + Dummy fallback)"""
 
-    points = reactive([])
-    range_max = 10.0
-    use_dummy = False
+    points: List[Tuple[float, float]] = reactive([])
+    range_max: float = 10.0
+    use_dummy: bool = False
+    last_updated: datetime | None = None
+    _image = None
 
     def __init__(self, topic="/scan", **kwargs):
         super().__init__(**kwargs)
@@ -55,7 +70,8 @@ class ScanView(Widget):
         ranges = msg.ranges
         self.range_max = msg.range_max
         self.points = self.polar_to_cartesian(ranges, msg.angle_min, msg.angle_increment)
-        self.refresh()
+        self.last_updated = datetime.now()
+        self._update_view()
 
     def polar_to_cartesian(self, ranges, angle_min, angle_increment):
         """極座標をXYへ変換"""
@@ -76,28 +92,54 @@ class ScanView(Widget):
             r = 5.0 + random.uniform(-1.0, 1.0) + 1.5 * math.sin(i / 10.0)
             r = max(0.5, min(r, 10.0))
             ranges.append(r)
-        self.points = self.polar_to_cartesian(ranges, -math.pi/2, (math.pi)/180)
-        self.refresh()
+        self.points = self.polar_to_cartesian(ranges, -math.pi / 2, (math.pi) / 180)
+        self.last_updated = datetime.now()
+        self._update_view()
+
+    def _make_image(self):
+        """点群をPillowで描画"""
+        width, height = self.size
+        if width < 8 or height < 8:
+            return None
+
+        img = Image.new("RGB", (width, height), (0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        cx, cy = width / 2, height / 2
+        scale = (min(width, height) / 2) / max(self.range_max, 1e-6)
+
+        # 原点描画
+        draw.ellipse((cx - 2, cy - 2, cx + 2, cy + 2), fill=(0, 255, 0))
+
+        # 軸線
+        draw.line((cx, 0, cx, height), fill=(40, 40, 40))
+        draw.line((0, cy, width, cy), fill=(40, 40, 40))
+
+        # 点群
+        for (x, y) in self.points:
+            sx = cx + x * scale
+            sy = cy - y * scale
+            if 0 <= sx < width and 0 <= sy < height:
+                dist = math.sqrt(x ** 2 + y ** 2)
+                c = max(0, min(255, int(255 * dist / self.range_max)))
+                draw.point((sx, sy), fill=(255 - c, c, 128))
+
+        # タイムスタンプ
+        if self.last_updated:
+            draw.text((5, 5), f"{'Dummy' if self.use_dummy else self.topic}", fill=(180, 180, 180))
+            draw.text((5, 20), self.last_updated.strftime("%H:%M:%S"), fill=(100, 200, 100))
+
+        return img
+
+    def _update_view(self):
+        """Pillow→Pixels→Textual更新"""
+        img = self._make_image()
+        if img:
+            self._image = Pixels.from_image(img)
+            self.refresh()
 
     def render(self):
-        """ASCII BEV描画"""
-        width, height = self.size
-        cx, cy = width // 2, height // 2
-        scale = (self.range_max / (min(width, height) / 2)) or 1.0
-
-        grid = [[" " for _ in range(width)] for _ in range(height)]
-        if 0 <= cy < height and 0 <= cx < width:
-            grid[cy][cx] = "+"
-
-        for (x, y) in self.points:
-            sx = int(cx + x / scale)
-            sy = int(cy - y / scale)
-            if 0 <= sy < height and 0 <= sx < width:
-                grid[sy][sx] = "*"
-
-        lines = ["".join(row) for row in grid]
-        title = f"📡 [b]LaserScan Viewer[/b] ({'Dummy' if self.use_dummy else self.topic})"
-        return title + "\n" + "\n".join(lines)
+        """rich-pixels互換 render()"""
+        return self._image or "No data"
 
     async def on_unmount(self):
         if not self.use_dummy and hasattr(self, "node"):
