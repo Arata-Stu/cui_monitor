@@ -1,10 +1,3 @@
-/* =========================================================
- * 🌌 RC Dashboard Theme - 2. Common Widget Styles (Fixed)
- * ========================================================= */
-
-/* -----------------------------------------
- * 🌐 メイングリッド領域
- * ----------------------------------------- */
 .main-grid-area {
     grid-columns: 1fr 1fr; 
     grid-gutter: 1;
@@ -13,18 +6,12 @@
     padding: 1;
 }
 
-/* -----------------------------------------
- * 🧠 共通スタイル
- * ----------------------------------------- */
 .sys {
     border: solid #00c8ff;
     background: #001019;
     height: 100%;
 }
 
-/* -----------------------------------------
- * 🌐 Network Monitor View
- * ----------------------------------------- */
 .net {
     border: solid #00ff99;
     background: #001612;
@@ -33,7 +20,6 @@
     padding: 1;
 }
 
-/* Wi-Fi 行（テキストとボタンを横並び） */
 .wifi-row {
     width: 100%;
     height: 3;
@@ -44,7 +30,6 @@
     padding-right: 2;          
 }
 
-/* 左側のラベル部分 */
 .wifi-row Static {
     width: 1fr;                
     height: 3;
@@ -53,7 +38,7 @@
     padding-left: 1;
 }
 
-/* ボタン共通 */
+/* Wi-Fi接続ボタンのレイアウト (Connect/Disconnect) */
 .wifi-button {
     margin-left: 2;
     height: 3;
@@ -62,20 +47,65 @@
     text-style: bold;
 }
 
-/* Connect ボタン */
+/* -----------------------------------------
+ * 🌐 Hotspotボタン (レイアウトのみ)
+ * ----------------------------------------- */
+#hotspot-row {
+    width: 100%;
+    height: 3; 
+    align-vertical: middle;
+    margin-top: 1;
+    margin-bottom: 1;
+}
+
+#hotspot-row Static {
+    width: auto;
+    height: 100%;
+    margin-right: 2; 
+}
+
+/* ホットスポットのON/OFFボタン (レイアウトのみ) */
+/* 色はグローバルな Button, Button.success, Button.error を使う */
+#hotspot-row Button {
+    width: 10; 
+    height: 100%;
+    margin-right: 1;
+}
+
+/* -----------------------------------------
+ * 🔘 グローバル・ボタンスタイル
+ * ----------------------------------------- */
+
+/*
+ * "variant=default" (非アクティブ) 時の
+ * グローバルなベーススタイル (グレー)
+ */
+Button {
+    background: #333333;
+    color: #aaaaaa;
+    border: solid #777777;
+}
+
+/*
+ * "variant=success" (アクティブON, Connect等)
+ * グローバルなスタイル (緑)
+ */
 Button.success {
     color: #001010;
     background: #00ffcc;
+    border: solid #00ffcc;
 }
 
-/* Disconnect ボタン */
+/*
+ * "variant=error" (アクティブOFF, Disconnect等)
+ * グローバルなスタイル (赤)
+ */
 Button.error {
     color: #ffeaea;
     background: #802020;
     border: solid #ff6666;
 }
 
-/* パスワード入力欄 */
 #wifi-pass {
     border: solid #00ffaa;
     background: #002020;
@@ -87,10 +117,6 @@ Button.error {
     align-horizontal: left;
 }
 
-
-/* -----------------------------------------
- * その他ウィジェット
- * ----------------------------------------- */
 .scan {
     border: solid #00d8ff;
     background: #001822;

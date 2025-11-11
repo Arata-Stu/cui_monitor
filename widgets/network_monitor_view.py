@@ -8,7 +8,7 @@ from textual.reactive import reactive
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Vertical, Horizontal
-from textual.widgets import Button, Input, Static
+from textual.widgets import Button, Input, Static, Switch
 
 
 WIDGET_META = {
@@ -21,12 +21,7 @@ WIDGET_META = {
 }
 
 
-# ==========================================================
-# 🌐 NetworkManager情報取得 (Linux / nmcli)
-# (ユーザーから提供された、最初のコードの関数)
-# ==========================================================
 async def get_nmcli_device_info() -> list[dict]:
-    """nmcli device show を解析し、全インタフェース情報を返す (Linux専用)"""
     proc = await asyncio.create_subprocess_shell(
         "nmcli -t device show",
         stdout=asyncio.subprocess.PIPE,
@@ -61,16 +56,11 @@ async def get_nmcli_device_info() -> list[dict]:
     if current:
         interfaces.append(current)
 
-    # IPv4があるものを先頭へソート
     interfaces.sort(key=lambda i: "IP" in i, reverse=True)
     return interfaces
 
 
-# ==========================================================
-# 🛰️ RSSIユーティリティ
-# ==========================================================
 def _rssi_to_bar(rssi: int, width: int = 5) -> str:
-    """RSSI値(-100〜0)を棒グラフ表示に変換"""
     try:
         rssi = int(rssi)
     except Exception:
@@ -79,16 +69,12 @@ def _rssi_to_bar(rssi: int, width: int = 5) -> str:
     return "▮" * level + "▯" * (width - level)
 
 
-# ==========================================================
-# 🧩 現在接続中SSID / 既知ネットワーク取得 (macOS)
-# ==========================================================
 def _get_current_ssid() -> tuple[str, int, str, bool]:
-    """現在接続中SSIDをnetworksetup経由で取得 (macOS)"""
     try:
         proc = subprocess.run(
             ["networksetup", "-getairportnetwork", "en0"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
             text=True,
             timeout=5,
         )
@@ -109,12 +95,11 @@ def _get_current_ssid() -> tuple[str, int, str, bool]:
 
 
 def _get_known_networks(limit: int = 5) -> list[tuple[str, int, str, bool]]:
-    """過去に接続したSSID一覧を取得 (macOS)"""
     try:
         proc = subprocess.run(
             ["networksetup", "-listpreferredwirelessnetworks", "en0"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
             text=True,
         )
         ssids = [
@@ -127,11 +112,7 @@ def _get_known_networks(limit: int = 5) -> list[tuple[str, int, str, bool]]:
         return [("diagnosing", 0, "N/A", False)]
 
 
-# ==========================================================
-# 🛰️ CoreWLANスキャン (macOS)
-# ==========================================================
 def _corewlan_scan_sync():
-    """CoreWLANスキャン（macOS用）"""
     try:
         from CoreWLAN import CWInterface
         iface = CWInterface.interface()
@@ -170,11 +151,7 @@ def _corewlan_scan_sync():
         return []
 
 
-# ==========================================================
-# 🧵 macOS/Linux共通スキャンAPI
-# ==========================================================
 async def scan_wifi_networks():
-    """OSごとのWi-Fiスキャン処理"""
     system = platform.system()
     if system == "Linux":
         proc = await asyncio.create_subprocess_shell(
@@ -200,25 +177,32 @@ async def scan_wifi_networks():
         return results
 
 
-# ==========================================================
-# 🌐 NetworkMonitorView (Textual)
-# ==========================================================
 class NetworkMonitorView(Widget):
-    """Wi-Fiスキャン・接続およびネットワーク状態を監視"""
-    # (CSSは省略)
-
     wifi_list = reactive([])
     ip_addresses = reactive([])
     active_ssid = reactive(None)
-
-    # 🔽 スキャン状態とアニメーション関連の変数を追加
     scanning_active = reactive(False)
-    _scan_dots = 0 # アニメーションのドット数
+    _scan_dots = 0
+
+    is_hotspot_enabled = reactive(False)
+    IS_LINUX = platform.system() == "Linux"
+    HOTSPOT_SSID = "TextualHotspot"
+    HOTSPOT_PASS = "textual123"
+
 
     def compose(self) -> ComposeResult:
         yield Static("🌐 [b]Network Monitor[/b]", id="net-title")
         self.ip_container = Vertical(id="net-ip-container")
         yield self.ip_container
+
+        if self.IS_LINUX:
+            yield Horizontal(
+                Static("Hotspot (Linux):", classes="label"),
+                Button("ON", id="hotspot-on", variant="default"),
+                Button("OFF", id="hotspot-off", variant="error"),
+                id="hotspot-row"
+            )
+
         yield Static("📶 [b]Available Wi-Fi Networks[/b]:", id="wifi-title")
         self.wifi_container = Vertical(id="wifi-container")
         yield self.wifi_container
@@ -226,30 +210,25 @@ class NetworkMonitorView(Widget):
         yield self.input_password
 
     async def on_mount(self):
-        """UI構築完了後の初期化"""
         self.set_interval(5.0, self.update_network)
         await self.update_network()
         
-        # 🔽 スキャンアニメーション用のタイマーを初期化 (最初は停止状態)
         self.scan_anim_timer = self.set_interval(
             0.5, self.animate_scanning, pause=True
         )
         
+        if self.IS_LINUX:
+            asyncio.create_task(self.check_hotspot_status())
+            
         asyncio.create_task(self._delayed_start())
 
     async def _delayed_start(self):
         await asyncio.sleep(0.5)
         await self.update_wifi_list()
 
-    # -----------------------------
-    # ネットワーク・スキャン (IPアドレス)
-    # -----------------------------
-    
-    # ... (変更なし: update_network, watch_ip_addresses) ...
     async def update_network(self):
-        """OSごとにIPアドレス一覧を更新する"""
         system = platform.system()
-        new_ips = [] # (iface, ip) のタプルを格納
+        new_ips = []
         try:
             if system == "Linux":
                 interfaces = await get_nmcli_device_info()
@@ -267,7 +246,6 @@ class NetworkMonitorView(Widget):
             self.ip_addresses = [("ERROR", str(e))]
 
     def watch_ip_addresses(self, old_ips: list, new_ips: list):
-        """IPアドレスリストの変更を監視し、UIを更新"""
         container = self.query_one("#net-ip-container", Vertical)
         container.remove_children()
         if not new_ips:
@@ -277,76 +255,119 @@ class NetworkMonitorView(Widget):
             container.mount(Static(f"{iface:10s} IP: [cyan]{ip}[/]", classes="net-ip-row"))
         self.refresh(layout=True)
 
-    # -----------------------------
-    # ネットワーク・スキャン (Wi-Fi)
-    # -----------------------------
+    def watch_is_hotspot_enabled(self, is_enabled: bool):
+        if not self.IS_LINUX:
+            return
+        
+        try:
+            on_button = self.query_one("#hotspot-on", Button)
+            off_button = self.query_one("#hotspot-off", Button)
+            
+            on_button.variant = "success" if is_enabled else "default"
+            off_button.variant = "error" if not is_enabled else "default"
+            
+        except Exception:
+            pass
 
-    # 🔽 新規追加: スキャンアニメーションのロジック
+    async def check_hotspot_status(self):
+        if not self.IS_LINUX:
+            return
+
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                "nmcli -t -f TYPE,DEVICE,MODE connection show --active",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            out, _ = await proc.communicate()
+            
+            is_active = False
+            for line in out.decode().splitlines():
+                parts = line.split(":")
+                if len(parts) >= 3 and "wifi" in parts[0] and "ap" in parts[2]:
+                    is_active = True
+                    break
+            
+            self.is_hotspot_enabled = is_active
+            
+        except Exception as e:
+            self.notify(f"Hotspot check failed: {e}", severity="error")
+            self.is_hotspot_enabled = False
+
+    async def run_hotspot_toggle(self, target_state: bool):
+        if not self.IS_LINUX:
+            return
+
+        if target_state:
+            self.notify("Turning hotspot ON...")
+            cmd_on = f'nmcli device wifi hotspot ifname "*" ssid "{self.HOTSPOT_SSID}" password "{self.HOTSPOT_PASS}"'
+            proc = await asyncio.create_subprocess_shell(
+                cmd_on,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        else:
+            self.notify("Turning hotspot OFF...")
+            cmd_off = f'nmcli connection down "{self.HOTSPOT_SSID}"'
+            proc = await asyncio.create_subprocess_shell(
+                cmd_off,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+        stdout, stderr = await proc.communicate()
+        
+        if proc.returncode == 0:
+            self.notify(f"Hotspot {'ON' if target_state else 'OFF'} success.")
+            self.is_hotspot_enabled = target_state
+            await asyncio.sleep(2)
+            await self.update_network()
+        else:
+            self.notify(f"Failed to toggle hotspot: {stderr.decode()}", severity="error")
+
     def animate_scanning(self):
-        """スキャン中のアニメーションを更新"""
         self._scan_dots = (self._scan_dots + 1) % 5
         dots = "." * (self._scan_dots + 1)
         try:
-            # "wifi-scan-status" IDを持つウィジェットを探して更新
             status_widget = self.query_one("#wifi-scan-status", Static)
-            status_widget.update(f"Scanning{dots:5s}") # 5文字幅を確保
+            status_widget.update(f"Scanning{dots:5s}")
         except Exception:
-            # スキャン完了と同時にウィジェットが消えるとエラーになるためキャッチ
             self.scan_anim_timer.pause()
 
-    # 🔽 新規追加: scanning_active の変更を監視
     def watch_scanning_active(self, scanning: bool):
-        """スキャン状態に応じてUIを変更し、タイマーを制御"""
         container = self.query_one("#wifi-container", Vertical)
-        
         if scanning:
-            # スキャン開始時
             container.remove_children()
             container.mount(Static("Scanning...", id="wifi-scan-status"))
             self._scan_dots = 0
-            self.scan_anim_timer.resume() # アニメーションタイマー再開
+            self.scan_anim_timer.resume()
         else:
-            # スキャン終了時
-            self.scan_anim_timer.pause() # アニメーションタイマー停止
-            # 結果を表示するためにコンテナをリフレッシュ
+            self.scan_anim_timer.pause()
             self.refresh_wifi_container()
 
-    # 🔽 修正: スキャン実行ロジック
     async def update_wifi_list(self):
-        """Wi-Fiスキャン（実際のOSスキャンを実行）"""
-        if self.scanning_active: # 既にスキャン中の場合は実行しない
+        if self.scanning_active:
             return
-            
-        self.scanning_active = True # 👈 これで watch_scanning_active が起動
-        
+        self.scanning_active = True
         try:
-            # 実際のOSスキャンを呼び出す
             self.wifi_list = await scan_wifi_networks()
-        
         except Exception as e:
-            # スキャンに失敗した場合
             self.notify(f"⚠️ Wi-Fi scan failed: {e}", severity="error")
             self.wifi_list = [("Scan Error", 0, str(e), False)]
-        
-        self.scanning_active = False # 👈 これで watch_scanning_active が起動
+        self.scanning_active = False
 
-    # 🔽 修正: 0件の場合の表示を追加
     def refresh_wifi_container(self):
-        """Wi-Fiリストを再構築 (スキャン終了時に呼ばれる)"""
-        # スキャン中はこの関数はUIを更新しない
         if self.scanning_active:
             return
             
         container = self.query_one("#wifi-container", Vertical)
         container.remove_children()
 
-        # 🔽 0件だった場合の表示を追加
         if not self.wifi_list:
             container.mount(Static("🚫 No Wi-Fi networks found"))
             self.refresh(layout=True)
             return
 
-        # (↓) 既存のリスト表示処理
         for ssid, rssi, sec, connected in self.wifi_list:
             bar = _rssi_to_bar(rssi)
             label = Static(f"{ssid:20s} RSSI: {rssi:>4} {bar} Sec: {sec}")
@@ -361,14 +382,10 @@ class NetworkMonitorView(Widget):
 
         self.refresh(layout=True)
 
-    # -----------------------------
-    # イベント処理
-    # -----------------------------
-    
-    # ... (変更なし: handle_button, handle_password_submit, connect_wifi, disconnect_wifi) ...
     @on(Button.Pressed)
     async def handle_button(self, event: Button.Pressed):
         btn = event.button
+        
         if btn.id.startswith("connect-"):
             ssid = btn.id.replace("connect-", "")
             self.active_ssid = ssid
@@ -376,7 +393,14 @@ class NetworkMonitorView(Widget):
             self.input_password.focus()
         elif btn.id.startswith("disconnect-"):
             ssid = btn.id.replace("disconnect-", "")
-            self.notify(f"📴 Disconnected from {ssid}")
+            await self.disconnect_wifi(ssid)
+
+        elif btn.id == "hotspot-on":
+            if not self.is_hotspot_enabled:
+                await self.run_hotspot_toggle(True)
+        elif btn.id == "hotspot-off":
+            if self.is_hotspot_enabled:
+                await self.run_hotspot_toggle(False)
 
     @on(Input.Submitted)
     async def handle_password_submit(self, event: Input.Submitted):
@@ -386,17 +410,16 @@ class NetworkMonitorView(Widget):
         if not password:
             self.notify("⚠️ Password is empty", severity="warning")
             return
-        self.notify(f"🧪 Simulated connection to {ssid} (password={password})", severity="info")
         await self.connect_wifi(ssid, password)
 
     async def connect_wifi(self, ssid: str, password: str):
-        """Wi-Fi接続"""
         self.notify(f"🧪 Simulated connection to {ssid} (password={password})")
+        await asyncio.sleep(3)
         await self.update_wifi_list()
+        await self.update_network()
 
     async def disconnect_wifi(self, ssid: str):
-        """Wi-Fi切断"""
         self.notify(f"📴 Disconnected from {ssid}")
+        await asyncio.sleep(2)
         await self.update_wifi_list()
-
-        
+        await self.update_network()
